@@ -1,0 +1,124 @@
+basePath: /api
+definitions:
+  github_com_mdflamingo_GophKeeper_internal_model.AuthResponse:
+    properties:
+      token:
+        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        type: string
+    type: object
+  github_com_mdflamingo_GophKeeper_internal_model.AuthUser:
+    properties:
+      login:
+        example: user@example.com
+        maxLength: 100
+        minLength: 3
+        type: string
+      password:
+        example: strongpassword123
+        maxLength: 100
+        minLength: 6
+        type: string
+    required:
+    - login
+    - password
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: support@gophkeeper.com
+    name: API Support
+  description: API сервиса GophKeeper для безопасного хранения данных
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: http://swagger.io/terms/
+  title: GophKeeper API
+  version: "1.0"
+paths:
+  /user/login:
+    post:
+      consumes:
+      - application/json
+      description: Вход в систему с получением JWT токена
+      parameters:
+      - description: Учетные данные пользователя
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_mdflamingo_GophKeeper_internal_model.AuthUser'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Успешный вход, токен в cookie и теле ответа
+          schema:
+            $ref: '#/definitions/github_com_mdflamingo_GophKeeper_internal_model.AuthResponse'
+        "400":
+          description: Неверный запрос или пустые поля
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Неверный логин или пароль
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Внутренняя ошибка сервера
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Аутентификация пользователя
+      tags:
+      - auth
+  /user/register:
+    post:
+      consumes:
+      - application/json
+      description: Создает нового пользователя с указанным логином и паролем
+      parameters:
+      - description: Данные для регистрации
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_mdflamingo_GophKeeper_internal_model.AuthUser'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Успешная регистрация, токен в cookie и теле ответа
+          schema:
+            $ref: '#/definitions/github_com_mdflamingo_GophKeeper_internal_model.AuthResponse'
+        "400":
+          description: Неверный запрос или пустые поля
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Пользователь с таким логином уже существует
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Внутренняя ошибка сервера
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Регистрация нового пользователя
+      tags:
+      - auth
+securityDefinitions:
+  BearerAuth:
+    description: Type "Bearer" followed by a space and JWT token.
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

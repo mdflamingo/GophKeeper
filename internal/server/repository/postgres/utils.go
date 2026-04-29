@@ -2,17 +2,25 @@ package postgres
 
 import (
 	"context"
-	"net/http"
+	"database/sql"
+	"errors"
+	"fmt"
 	"time"
 
+	"github.com/golang-migrate/migrate/v4"
+	"github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
+	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mdflamingo/GophKeeper/internal/logger"
-	"go.uber.org/zap"
+	"github.com/mdflamingo/GophKeeper/internal/model"
 )
 
-// Close implements [Storage].
-func (d *DBStorage) Close() error {
-	panic("unimplemented")
-}
+var ErrConflict = errors.New("conflict: duplicate entry")
+var ErrNotFound = errors.New("obj not found")
+var ErrInsufficientFunds = errors.New("insufficient funds")
 
 // Delete implements [Storage].
 func (d *DBStorage) Delete(doneCh chan struct{}, inputCh chan string, userID string) chan error {
@@ -29,29 +37,125 @@ func (d *DBStorage) GetList() {
 	panic("unimplemented")
 }
 
-// Ping implements [Storage].
-func (d *DBStorage) Ping(ctx context.Context) error {
-	panic("unimplemented")
-}
-
 // Save implements [Storage].
 func (d *DBStorage) Save(shortURL string, originalURL string, userID string) (string, error) {
 	panic("unimplemented")
 }
 
-func HealthCheck(response http.ResponseWriter, request *http.Request, storage Storage) {
-	logger.Log.Info("HealthCheck called", zap.String("method", request.Method))
+func (d *DBStorage) getPool(ctx context.Context) (*pgxpool.Pool, error) {
+	d.poolOnce.Do(func() {
+		config, err := pgxpool.ParseConfig(d.dsn)
+		if err != nil {
+			d.initErr = fmt.Errorf("failed to parse config: %w", err)
+			return
+		}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
+		config.MaxConns = 10
+		config.MinConns = 2
+		config.MaxConnLifetime = time.Hour
+		config.MaxConnIdleTime = 30 * time.Minute
+		config.HealthCheckPeriod = time.Minute
 
-	if err := storage.Ping(ctx); err != nil {
-		logger.Log.Error("storage not available", zap.Error(err))
-		http.Error(response, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
+		config.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeDescribeExec
+
+		pool, err := pgxpool.NewWithConfig(ctx, config)
+		if err != nil {
+			d.initErr = fmt.Errorf("failed to create connection pool: %w", err)
+			return
+		}
+
+		ctxPing, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+
+		if err := pool.Ping(ctxPing); err != nil {
+			pool.Close()
+			d.initErr = fmt.Errorf("failed to ping database: %w", err)
+			return
+		}
+
+		d.pool = pool
+
+		if err := d.runMigrationsSync(); err != nil {
+			d.initErr = fmt.Errorf("failed to run migrations: %w", err)
+			return
+		}
+	})
+
+	if d.initErr != nil {
+		return nil, d.initErr
+	}
+	return d.pool, nil
+}
+
+func (d *DBStorage) runMigrationsSync() error {
+	logger.Log.Info("Running database migrations (sync)")
+
+	db, err := sql.Open("postgres", d.dsn)
+	if err != nil {
+		return fmt.Errorf("failed to open database for migrations: %w", err)
+	}
+	defer db.Close()
+
+	if err := db.Ping(); err != nil {
+		return fmt.Errorf("failed to ping database for migrations: %w", err)
 	}
 
-	logger.Log.Info("HealthCheck completed successfully")
-	response.WriteHeader(http.StatusOK)
-	response.Write([]byte("OK"))
+	driver, err := postgres.WithInstance(db, &postgres.Config{})
+	if err != nil {
+		return fmt.Errorf("failed to create migration driver: %w", err)
+	}
+
+	m, err := migrate.NewWithDatabaseInstance(
+		"file://migrations",
+		"postgres",
+		driver)
+	if err != nil {
+		return fmt.Errorf("failed to create migrate instance: %w", err)
+	}
+
+	err = m.Up()
+	if err != nil && err != migrate.ErrNoChange {
+		return fmt.Errorf("failed to run migrations: %w", err)
+	}
+
+	logger.Log.Info("Migrations completed successfully")
+	return nil
+}
+
+func (d *DBStorage) SaveUser(user model.UserDB) (int, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	var userID int
+
+	err := d.pool.QueryRow(ctx,
+		`INSERT INTO users (login, password)
+         VALUES ($1, $2)
+		 RETURNING id`,
+		user.Login, user.Password).Scan(&userID)
+
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
+			return 0, ErrConflict
+		}
+		return 0, fmt.Errorf("failed to save user: %w", err)
+	}
+
+	return userID, nil
+}
+
+func (d *DBStorage) GetUser(user model.UserDB) (int, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	var userID int
+
+	err := d.pool.QueryRow(ctx, `SELECT id FROM users WHERE login = $1 and password = $2`, user.Login, user.Password).Scan(&userID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, ErrNotFound
+		}
+		return 0, fmt.Errorf("failed to get user: %w", err)
+	}
+	return userID, nil
 }

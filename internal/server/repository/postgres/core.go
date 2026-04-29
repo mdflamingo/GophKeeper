@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mdflamingo/GophKeeper/internal/config"
 	"github.com/mdflamingo/GophKeeper/internal/logger"
+	"github.com/mdflamingo/GophKeeper/internal/model"
 	"go.uber.org/zap"
 )
 
@@ -19,6 +21,8 @@ type Storage interface {
 	Delete(doneCh chan struct{}, inputCh chan string, userID string) chan error
 	Close() error
 	Ping(ctx context.Context) error
+	SaveUser(user model.UserDB) (int, error) // Добавьте эти методы в интерфейс
+	GetUser(user model.UserDB) (int, error)  // если они нужны в интерфейсе
 }
 
 type DBStorage struct {
@@ -29,9 +33,53 @@ type DBStorage struct {
 }
 
 func NewDBStorage(dsn string) (*DBStorage, error) {
-	return &DBStorage{
+	storage := &DBStorage{
 		dsn: dsn,
-	}, nil
+	}
+
+	// Инициализируем пул сразу при создании
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := storage.initPool(ctx); err != nil {
+		return nil, fmt.Errorf("failed to initialize pool: %w", err)
+	}
+
+	return storage, nil
+}
+
+func (d *DBStorage) initPool(ctx context.Context) error {
+	config, err := pgxpool.ParseConfig(d.dsn)
+	if err != nil {
+		return fmt.Errorf("failed to parse config: %w", err)
+	}
+
+	config.MaxConns = 10
+	config.MinConns = 2
+	config.MaxConnLifetime = time.Hour
+	config.MaxConnIdleTime = 30 * time.Minute
+	config.HealthCheckPeriod = time.Minute
+
+	pool, err := pgxpool.NewWithConfig(ctx, config)
+	if err != nil {
+		return fmt.Errorf("failed to create connection pool: %w", err)
+	}
+
+	ctxPing, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	if err := pool.Ping(ctxPing); err != nil {
+		pool.Close()
+		return fmt.Errorf("failed to ping database: %w", err)
+	}
+
+	d.pool = pool
+
+	if err := d.runMigrationsSync(); err != nil {
+		return fmt.Errorf("failed to run migrations: %w", err)
+	}
+
+	return nil
 }
 
 func ConnectPG(pgConf *config.Postgres) (Storage, error) {
@@ -43,15 +91,34 @@ func ConnectPG(pgConf *config.Postgres) (Storage, error) {
 		pgConf.PostgresPort,
 		pgConf.PostgresDB,
 	)
-	if dataBaseDSN != "" {
-		if storage, err := NewDBStorage(dataBaseDSN); err == nil {
-			logger.Log.Info("Successfully initialized database storage")
-			return storage, nil
-		} else {
-			logger.Log.Error("Failed to initialize database storage", zap.Error(err))
-			return nil, err
-		}
+	fmt.Println(dataBaseDSN)
+
+	if dataBaseDSN == "" {
+		return nil, errors.New("database DSN is empty")
 	}
 
-	return nil, errors.New("database DSN is empty")
+	storage, err := NewDBStorage(dataBaseDSN)
+	if err != nil {
+		logger.Log.Error("Failed to initialize database storage", zap.Error(err))
+		return nil, err
+	}
+
+	logger.Log.Info("Successfully initialized database storage")
+	return storage, nil
+}
+
+// Close implements Storage interface
+func (d *DBStorage) Close() error {
+	if d.pool != nil {
+		d.pool.Close()
+	}
+	return nil
+}
+
+// Ping implements Storage interface
+func (d *DBStorage) Ping(ctx context.Context) error {
+	if d.pool == nil {
+		return fmt.Errorf("database pool is not initialized")
+	}
+	return d.pool.Ping(ctx)
 }

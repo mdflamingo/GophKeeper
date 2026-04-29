@@ -1,0 +1,183 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "API сервиса GophKeeper для безопасного хранения данных",
+        "title": "GophKeeper API",
+        "termsOfService": "http://swagger.io/terms/",
+        "contact": {
+            "name": "API Support",
+            "email": "support@gophkeeper.com"
+        },
+        "license": {
+            "name": "Apache 2.0",
+            "url": "http://www.apache.org/licenses/LICENSE-2.0.html"
+        },
+        "version": "1.0"
+    },
+    "host": "localhost:8080",
+    "basePath": "/api",
+    "paths": {
+        "/user/login": {
+            "post": {
+                "description": "Вход в систему с получением JWT токена",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Аутентификация пользователя",
+                "parameters": [
+                    {
+                        "description": "Учетные данные пользователя",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_mdflamingo_GophKeeper_internal_model.AuthUser"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Успешный вход, токен в cookie и теле ответа",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_mdflamingo_GophKeeper_internal_model.AuthResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Неверный запрос или пустые поля",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Неверный логин или пароль",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Внутренняя ошибка сервера",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/user/register": {
+            "post": {
+                "description": "Создает нового пользователя с указанным логином и паролем",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Регистрация нового пользователя",
+                "parameters": [
+                    {
+                        "description": "Данные для регистрации",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_mdflamingo_GophKeeper_internal_model.AuthUser"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Успешная регистрация, токен в cookie и теле ответа",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_mdflamingo_GophKeeper_internal_model.AuthResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Неверный запрос или пустые поля",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Пользователь с таким логином уже существует",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Внутренняя ошибка сервера",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "github_com_mdflamingo_GophKeeper_internal_model.AuthResponse": {
+            "type": "object",
+            "properties": {
+                "token": {
+                    "type": "string",
+                    "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                }
+            }
+        },
+        "github_com_mdflamingo_GophKeeper_internal_model.AuthUser": {
+            "type": "object",
+            "required": [
+                "login",
+                "password"
+            ],
+            "properties": {
+                "login": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 3,
+                    "example": "user@example.com"
+                },
+                "password": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 6,
+                    "example": "strongpassword123"
+                }
+            }
+        }
+    },
+    "securityDefinitions": {
+        "BearerAuth": {
+            "description": "Type \"Bearer\" followed by a space and JWT token.",
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header"
+        }
+    }
+}

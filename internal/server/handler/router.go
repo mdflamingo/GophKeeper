@@ -4,19 +4,84 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	httpSwagger "github.com/swaggo/http-swagger"
+
+	_ "github.com/mdflamingo/GophKeeper/api/swagger"
 	"github.com/mdflamingo/GophKeeper/internal/config"
 	"github.com/mdflamingo/GophKeeper/internal/logger"
 	"github.com/mdflamingo/GophKeeper/internal/server/repository/postgres"
+	"github.com/mdflamingo/GophKeeper/internal/server/service"
 )
 
+// NewRouter godoc
+// @title           GophKeeper API
+// @version         1.0
+// @description     API для безопасного хранения и управления данными
+// @termsOfService  http://swagger.io/terms/
+
+// @contact.name   API Support
+// @contact.email  support@gophkeeper.com
+
+// @license.name   Apache 2.0
+// @license.url    http://www.apache.org/licenses/LICENSE-2.0.html
+
+// @host           localhost:8080
+// @BasePath       /api
+
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Type "Bearer" followed by a space and JWT token.
 func NewRouter(conf *config.Config, storage postgres.Storage) *chi.Mux {
 	r := chi.NewRouter()
 
+	userService := service.NewUserService(storage.(*postgres.DBStorage))
+
 	r.Use(logger.RequestLogger)
 
-	r.Get("/ping", func(w http.ResponseWriter, r *http.Request) {
-		postgres.HealthCheck(w, r, storage)
+	// Публичные маршруты (не требуют аутентификации)
+	r.Group(func(r chi.Router) {
+		// HealthCheck godoc
+		// @Summary      Проверка здоровья сервера
+		// @Description  Проверяет доступность сервера и подключение к БД
+		// @Tags         monitoring
+		// @Produce      plain
+		// @Success      200 {string} string "OK"
+		// @Failure      500 {string} string "Internal Server Error"
+		// @Router       /ping [get]
+		r.Get("/ping", func(w http.ResponseWriter, r *http.Request) {
+			service.HealthCheck(w, r, storage)
+		})
+
+		r.Post("/api/user/register", func(w http.ResponseWriter, r *http.Request) {
+			RegisterHandler(w, r, userService, conf.SecretKey)
+		})
+		r.Post("/api/user/login", func(w http.ResponseWriter, r *http.Request) {
+			LoginHandler(w, r, userService, conf.SecretKey)
+		})
 	})
+
+	// // Защищенные маршруты (требуют аутентификации)
+	// r.Group(func(r chi.Router) {
+	// 	r.Use(AuthMiddleware(conf.SecretKey))
+
+	// 	// Пример защищенного маршрута
+	// 	// @Summary      Получение данных пользователя
+	// 	// @Description  Возвращает все данные текущего пользователя
+	// 	// @Tags         data
+	// 	// @Security     BearerAuth
+	// 	// @Produce      json
+	// 	// @Success      200 {array} model.UserData "Список данных"
+	// 	// @Failure      401 {object} map[string]string "Не авторизован"
+	// 	// @Failure      500 {object} map[string]string "Внутренняя ошибка"
+	// 	// @Router       /user/data [get]
+	// 	r.Get("/api/user/data", GetUserDataHandler(storage))
+	// })
+
+	// Swagger документация
+	r.Get("/swagger/*", httpSwagger.Handler(
+		httpSwagger.URL("/swagger/doc.json"),
+	))
 
 	return r
 }
