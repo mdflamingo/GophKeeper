@@ -36,23 +36,14 @@ func NewRouter(conf *config.Config, storage postgres.Storage) *chi.Mux {
 	r := chi.NewRouter()
 
 	userService := service.NewUserService(storage.(*postgres.DBStorage))
+	gophekeeperService := service.NewGopheKeeperService(storage.(*postgres.DBStorage))
 
 	r.Use(logger.RequestLogger)
 
-	// Публичные маршруты (не требуют аутентификации)
 	r.Group(func(r chi.Router) {
-		// HealthCheck godoc
-		// @Summary      Проверка здоровья сервера
-		// @Description  Проверяет доступность сервера и подключение к БД
-		// @Tags         monitoring
-		// @Produce      plain
-		// @Success      200 {string} string "OK"
-		// @Failure      500 {string} string "Internal Server Error"
-		// @Router       /ping [get]
-		r.Get("/ping", func(w http.ResponseWriter, r *http.Request) {
-			service.HealthCheck(w, r, storage)
+		r.Get("/api/ping", func(w http.ResponseWriter, r *http.Request) {
+			DBHealthCheck(w, r, storage)
 		})
-
 		r.Post("/api/user/register", func(w http.ResponseWriter, r *http.Request) {
 			RegisterHandler(w, r, userService, conf.SecretKey)
 		})
@@ -61,22 +52,25 @@ func NewRouter(conf *config.Config, storage postgres.Storage) *chi.Mux {
 		})
 	})
 
-	// // Защищенные маршруты (требуют аутентификации)
-	// r.Group(func(r chi.Router) {
-	// 	r.Use(AuthMiddleware(conf.SecretKey))
+	// Защищенные маршруты (требуют аутентификации)
+	r.Group(func(r chi.Router) {
+		r.Use(AuthMiddleware(conf.SecretKey))
 
-	// 	// Пример защищенного маршрута
-	// 	// @Summary      Получение данных пользователя
-	// 	// @Description  Возвращает все данные текущего пользователя
-	// 	// @Tags         data
-	// 	// @Security     BearerAuth
-	// 	// @Produce      json
-	// 	// @Success      200 {array} model.UserData "Список данных"
-	// 	// @Failure      401 {object} map[string]string "Не авторизован"
-	// 	// @Failure      500 {object} map[string]string "Внутренняя ошибка"
-	// 	// @Router       /user/data [get]
-	// 	r.Get("/api/user/data", GetUserDataHandler(storage))
-	// })
+		// Пример защищенного маршрута
+		// @Summary      Получение данных пользователя
+		// @Description  Возвращает все данные текущего пользователя
+		// @Tags         data
+		// @Security     BearerAuth
+		// @Produce      json
+		// @Success      200 {array} model.UserData "Список данных"
+		// @Failure      401 {object} map[string]string "Не авторизован"
+		// @Failure      500 {object} map[string]string "Внутренняя ошибка"
+		// @Router       /user/data [get]
+
+		r.Post("/api/data/list", func(w http.ResponseWriter, r *http.Request) {
+			GetListHandler(w, r, gophekeeperService)
+		})
+	})
 
 	// Swagger документация
 	r.Get("/swagger/*", httpSwagger.Handler(

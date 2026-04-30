@@ -35,6 +35,23 @@ info:
   title: GophKeeper API
   version: "1.0"
 paths:
+  /ping:
+    get:
+      description: Проверяет доступность сервера и подключение к БД
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Проверка здоровья сервера
+      tags:
+      - monitoring
   /user/login:
     post:
       consumes:

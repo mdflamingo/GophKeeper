@@ -1,28 +1,45 @@
 package service
 
 import (
-	"context"
-	"net/http"
-	"time"
-
-	"github.com/mdflamingo/GophKeeper/internal/logger"
+	"github.com/mdflamingo/GophKeeper/internal/model"
 	"github.com/mdflamingo/GophKeeper/internal/server/repository/postgres"
-	"go.uber.org/zap"
 )
 
-func HealthCheck(response http.ResponseWriter, request *http.Request, storage postgres.Storage) {
-	logger.Log.Info("HealthCheck called", zap.String("method", request.Method))
+type GopheKeeperService struct {
+	repo *postgres.DBStorage
+}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
+func NewGopheKeeperService(repo *postgres.DBStorage) *GopheKeeperService {
+	return &GopheKeeperService{repo: repo}
+}
 
-	if err := storage.Ping(ctx); err != nil {
-		logger.Log.Error("storage not available", zap.Error(err))
-		http.Error(response, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
+// GetUserItems возвращает список секретов в виде response моделей
+func (s *GopheKeeperService) GetUserItems(userID int) (*model.UserDataListResponse, error) {
+	if userID == 0 {
+		return &model.UserDataListResponse{
+			Items: []model.UserDataResponse{},
+			Count: 0,
+		}, nil
 	}
 
-	logger.Log.Info("HealthCheck completed successfully")
-	response.WriteHeader(http.StatusOK)
-	response.Write([]byte("OK"))
+	items, err := s.repo.GetList(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]model.UserDataResponse, len(items))
+	for i, item := range items {
+		result[i] = model.UserDataResponse{
+			DataType:  postgres.DataType(item.DataType),
+			MetaData:  item.MetaData,
+			CreatedAt: item.CreatedAt,
+		}
+	}
+
+	response := &model.UserDataListResponse{
+		Items: result,
+		Count: len(items),
+	}
+
+	return response, nil
 }

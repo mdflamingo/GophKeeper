@@ -1,14 +1,15 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
-	"errors"
 	"io"
 	"net/http"
 	"time"
 
 	"github.com/mdflamingo/GophKeeper/internal/logger"
 	"github.com/mdflamingo/GophKeeper/internal/model"
+	"github.com/mdflamingo/GophKeeper/internal/server/repository/postgres"
 	"github.com/mdflamingo/GophKeeper/internal/server/service"
 	"go.uber.org/zap"
 )
@@ -42,7 +43,7 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request, svc *service.UserSe
 
 	userID, err := svc.Register(req)
 	if err != nil {
-		handleRegistrationError(w, err, req.Login)
+		HandleRegistrationError(w, err, req.Login)
 		return
 	}
 
@@ -53,28 +54,13 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request, svc *service.UserSe
 		return
 	}
 
-	setTokenCookie(w, token)
+	SetTokenCookie(w, token)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	resp := model.AuthResponse{Token: token}
 	respJSON, _ := json.Marshal(resp)
 	w.Write(respJSON)
-}
-
-// handleRegistrationError обрабатывает ошибки регистрации
-func handleRegistrationError(w http.ResponseWriter, err error, login string) {
-	switch {
-	case errors.Is(err, service.ErrEmptyRequiredField):
-		logger.Log.Warn("empty required field", zap.String("login", login))
-		http.Error(w, "Login and password are required", http.StatusBadRequest)
-	case errors.Is(err, service.ErrUserAlreadyExists):
-		logger.Log.Warn("user already exists", zap.String("login", login))
-		http.Error(w, "User already exists", http.StatusConflict)
-	default:
-		logger.Log.Error("failed to register user", zap.Error(err))
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-	}
 }
 
 // LoginHandler godoc
@@ -106,7 +92,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request, svc *service.UserServi
 
 	userID, err := svc.Login(req)
 	if err != nil {
-		handleLoginError(w, err, req.Login)
+		HandleLoginError(w, err, req.Login)
 		return
 	}
 
@@ -117,7 +103,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request, svc *service.UserServi
 		return
 	}
 
-	setTokenCookie(w, token)
+	SetTokenCookie(w, token)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
@@ -126,30 +112,71 @@ func LoginHandler(w http.ResponseWriter, r *http.Request, svc *service.UserServi
 	w.Write(respJSON)
 }
 
-// handleLoginError обрабатывает ошибки входа
-func handleLoginError(w http.ResponseWriter, err error, login string) {
-	switch {
-	case errors.Is(err, service.ErrEmptyRequiredField):
-		logger.Log.Warn("empty required field", zap.String("login", login))
-		http.Error(w, "Login and password are required", http.StatusBadRequest)
-	case errors.Is(err, service.ErrInvalidCredentials):
-		logger.Log.Warn("invalid credentials", zap.String("login", login))
-		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
-	default:
-		logger.Log.Error("failed to login user", zap.Error(err))
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+// GetListHandler godoc
+// @Summary      Получение списка секретов пользователя
+// @Description  Возвращает список всех сохраненных секретов (данных) текущего авторизованного пользователя
+// @Tags         secrets
+// @Accept       json
+// @Produce      json
+// @Security     ApiKeyAuth
+// @Success      200 {array} postgres.UserDataDB "Успешное получение списка секретов"
+// @Success      204 "Нет содержимого (список секретов пуст)"
+// @Failure      400 {object} map[string]string "Неверный запрос"
+// @Failure      401 {object} map[string]string "Пользователь не авторизован"
+// @Failure      500 {object} map[string]string "Внутренняя ошибка сервера"
+// @Router       /user/secrets [get]
+func GetListHandler(w http.ResponseWriter, r *http.Request, svc *service.GopheKeeperService) {
+	userID, err := GetUserIDFromRequest(r)
+	if err != nil {
+		logger.Log.Warn("failed to get user ID", zap.Error(err))
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		return
 	}
+
+	items, err := svc.GetUserItems(userID)
+	if err != nil {
+		logger.Log.Error("failed to get user secrets", zap.Error(err))
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+	if items.Count == 0 {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	respJSON, err := json.Marshal(items)
+	if err != nil {
+		logger.Log.Error("failed to marshal response to JSON", zap.Error(err))
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(respJSON)
 }
 
-// setTokenCookie устанавливает JWT токен в cookie
-func setTokenCookie(w http.ResponseWriter, token string) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     "token",
-		Value:    token,
-		HttpOnly: true,
-		Secure:   false,
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   int(30 * 24 * time.Hour.Seconds()),
-		Path:     "/",
-	})
+// HealthCheck godoc
+// @Summary      Проверка здоровья сервера
+// @Description  Проверяет доступность сервера и подключение к БД
+// @Tags         monitoring
+// @Produce      plain
+// @Success      200 {string} string "OK"
+// @Failure      500 {string} string "Internal Server Error"
+// @Router       /ping [get]
+func DBHealthCheck(response http.ResponseWriter, request *http.Request, storage postgres.Storage) {
+	logger.Log.Info("HealthCheck called", zap.String("method", request.Method))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	if err := storage.Ping(ctx); err != nil {
+		logger.Log.Error("storage not available", zap.Error(err))
+		http.Error(response, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	logger.Log.Info("HealthCheck completed successfully")
+	response.WriteHeader(http.StatusOK)
+	response.Write([]byte("OK"))
 }

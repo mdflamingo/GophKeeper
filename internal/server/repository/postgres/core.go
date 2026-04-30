@@ -10,19 +10,18 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mdflamingo/GophKeeper/internal/config"
 	"github.com/mdflamingo/GophKeeper/internal/logger"
-	"github.com/mdflamingo/GophKeeper/internal/model"
 	"go.uber.org/zap"
 )
 
 type Storage interface {
 	Save(shortURL, originalURL, userID string) (string, error)
 	Get(shortURL string) (originalURL string, found bool, deleted bool)
-	GetList()
+	GetList(userID int) ([]UserDataDB, error)
 	Delete(doneCh chan struct{}, inputCh chan string, userID string) chan error
 	Close() error
 	Ping(ctx context.Context) error
-	SaveUser(user model.UserDB) (int, error) // Добавьте эти методы в интерфейс
-	GetUser(user model.UserDB) (int, error)  // если они нужны в интерфейсе
+	SaveUser(user UserDB) (int, error)
+	GetUser(user UserDB) (int, error)
 }
 
 type DBStorage struct {
@@ -36,8 +35,6 @@ func NewDBStorage(dsn string) (*DBStorage, error) {
 	storage := &DBStorage{
 		dsn: dsn,
 	}
-
-	// Инициализируем пул сразу при создании
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -91,7 +88,6 @@ func ConnectPG(pgConf *config.Postgres) (Storage, error) {
 		pgConf.PostgresPort,
 		pgConf.PostgresDB,
 	)
-	fmt.Println(dataBaseDSN)
 
 	if dataBaseDSN == "" {
 		return nil, errors.New("database DSN is empty")
@@ -107,7 +103,6 @@ func ConnectPG(pgConf *config.Postgres) (Storage, error) {
 	return storage, nil
 }
 
-// Close implements Storage interface
 func (d *DBStorage) Close() error {
 	if d.pool != nil {
 		d.pool.Close()
@@ -115,7 +110,6 @@ func (d *DBStorage) Close() error {
 	return nil
 }
 
-// Ping implements Storage interface
 func (d *DBStorage) Ping(ctx context.Context) error {
 	if d.pool == nil {
 		return fmt.Errorf("database pool is not initialized")

@@ -23,6 +23,32 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/ping": {
+            "get": {
+                "description": "Проверяет доступность сервера и подключение к БД",
+                "produces": [
+                    "text/plain"
+                ],
+                "tags": [
+                    "monitoring"
+                ],
+                "summary": "Проверка здоровья сервера",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
         "/user/login": {
             "post": {
                 "description": "Вход в систему с получением JWT токена",

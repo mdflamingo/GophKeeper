@@ -15,7 +15,6 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mdflamingo/GophKeeper/internal/logger"
-	"github.com/mdflamingo/GophKeeper/internal/model"
 )
 
 var ErrConflict = errors.New("conflict: duplicate entry")
@@ -33,8 +32,42 @@ func (d *DBStorage) Get(shortURL string) (originalURL string, found bool, delete
 }
 
 // GetList implements [Storage].
-func (d *DBStorage) GetList() {
-	panic("unimplemented")
+func (d *DBStorage) GetList(userID int) ([]UserDataDB, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	pool, err := d.getPool(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("database not available: %w", err)
+	}
+
+	rows, err := pool.Query(ctx,
+		"SELECT data_type, metadata, created_at FROM user_data WHERE user_id = $1",
+		userID)
+
+	if err != nil {
+		return nil, fmt.Errorf("database query error: %w", err)
+	}
+	defer rows.Close()
+
+	var items []UserDataDB
+
+	for rows.Next() {
+		var item UserDataDB
+
+		err := rows.Scan(&item.DataType, &item.MetaData, &item.CreatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("data scan error: %w", err)
+		}
+
+		items = append(items, item)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows processing error: %w", err)
+	}
+
+	return items, nil
 }
 
 // Save implements [Storage].
@@ -122,7 +155,7 @@ func (d *DBStorage) runMigrationsSync() error {
 	return nil
 }
 
-func (d *DBStorage) SaveUser(user model.UserDB) (int, error) {
+func (d *DBStorage) SaveUser(user UserDB) (int, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	var userID int
@@ -144,7 +177,7 @@ func (d *DBStorage) SaveUser(user model.UserDB) (int, error) {
 	return userID, nil
 }
 
-func (d *DBStorage) GetUser(user model.UserDB) (int, error) {
+func (d *DBStorage) GetUser(user UserDB) (int, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
