@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strconv"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/mdflamingo/GophKeeper/internal/logger"
 	"github.com/mdflamingo/GophKeeper/internal/model"
 	"github.com/mdflamingo/GophKeeper/internal/server/repository/postgres"
@@ -112,7 +114,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request, svc *service.UserServi
 	w.Write(respJSON)
 }
 
-// GetListHandler godoc
+// GetSecretListHandler godoc
 // @Summary      Получение списка секретов пользователя
 // @Description  Возвращает список всех сохраненных секретов (данных) текущего авторизованного пользователя
 // @Tags         secrets
@@ -124,8 +126,8 @@ func LoginHandler(w http.ResponseWriter, r *http.Request, svc *service.UserServi
 // @Failure      400 {object} map[string]string "Неверный запрос"
 // @Failure      401 {object} map[string]string "Пользователь не авторизован"
 // @Failure      500 {object} map[string]string "Внутренняя ошибка сервера"
-// @Router       /user/secrets [get]
-func GetListHandler(w http.ResponseWriter, r *http.Request, svc *service.GopheKeeperService) {
+// @Router       /secret/list [get]
+func GetSecretListHandler(w http.ResponseWriter, r *http.Request, svc *service.GopheKeeperService) {
 	userID, err := GetUserIDFromRequest(r)
 	if err != nil {
 		logger.Log.Warn("failed to get user ID", zap.Error(err))
@@ -133,18 +135,70 @@ func GetListHandler(w http.ResponseWriter, r *http.Request, svc *service.GopheKe
 		return
 	}
 
-	items, err := svc.GetUserItems(userID)
+	secrets, err := svc.GetSecrets(userID)
 	if err != nil {
 		logger.Log.Error("failed to get user secrets", zap.Error(err))
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
-	if items.Count == 0 {
+	if secrets.Count == 0 {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-	respJSON, err := json.Marshal(items)
+	respJSON, err := json.Marshal(secrets)
+	if err != nil {
+		logger.Log.Error("failed to marshal response to JSON", zap.Error(err))
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(respJSON)
+}
+
+// GetSecretHandler godoc
+// @Summary      Получение секрета пользователя
+// @Description  Возвращает секрет текущего авторизованного пользователя по id секрета
+// @Tags         secrets
+// @Accept       json
+// @Produce      json
+// @Security     ApiKeyAuth
+// @Success      200  postgres.UserDataDB "Успешное получение секрета"
+// @Success      204 "Секрет не найден"
+// @Failure      400 {object} map[string]string "Неверный запрос"
+// @Failure      401 {object} map[string]string "Пользователь не авторизован"
+// @Failure      500 {object} map[string]string "Внутренняя ошибка сервера"
+// @Router       /secret [get]
+func GetSecretHandler(w http.ResponseWriter, r *http.Request, svc *service.GopheKeeperService) {
+	userID, err := GetUserIDFromRequest(r)
+	if err != nil {
+		logger.Log.Warn("failed to get user ID", zap.Error(err))
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		return
+	}
+
+	secretIDStr := chi.URLParam(r, "id")
+	if secretIDStr == "" {
+		logger.Log.Warn("order number is empty")
+		http.Error(w, "Order number is required", http.StatusBadRequest)
+		return
+	}
+	secretID, err := strconv.Atoi(secretIDStr)
+	if err != nil || secretID <= 0 {
+		logger.Log.Warn("invalid secret ID", zap.String("id", secretIDStr))
+		http.Error(w, "Invalid secret ID", http.StatusBadRequest)
+		return
+	}
+
+	item, err := svc.GetOneSecret(userID, secretID)
+	if err != nil {
+		logger.Log.Error("failed to get user secrets", zap.Error(err))
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+	respJSON, err := json.Marshal(item)
 	if err != nil {
 		logger.Log.Error("failed to marshal response to JSON", zap.Error(err))
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)

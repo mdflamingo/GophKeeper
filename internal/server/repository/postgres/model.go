@@ -18,7 +18,8 @@ const (
 	CREDENTIALS DataType = "Credentials"
 )
 
-type UserDataDB struct {
+type SecretDB struct {
+	ID        int             `json:"id"`
 	DataType  DataType        `json:"data_type"`
 	MetaData  json.RawMessage `json:"meta_data"`
 	CreatedAt time.Time       `json:"created_at"`

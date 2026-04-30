@@ -56,19 +56,11 @@ func NewRouter(conf *config.Config, storage postgres.Storage) *chi.Mux {
 	r.Group(func(r chi.Router) {
 		r.Use(AuthMiddleware(conf.SecretKey))
 
-		// Пример защищенного маршрута
-		// @Summary      Получение данных пользователя
-		// @Description  Возвращает все данные текущего пользователя
-		// @Tags         data
-		// @Security     BearerAuth
-		// @Produce      json
-		// @Success      200 {array} model.UserData "Список данных"
-		// @Failure      401 {object} map[string]string "Не авторизован"
-		// @Failure      500 {object} map[string]string "Внутренняя ошибка"
-		// @Router       /user/data [get]
-
-		r.Post("/api/data/list", func(w http.ResponseWriter, r *http.Request) {
-			GetListHandler(w, r, gophekeeperService)
+		r.Get("/api/secret/list", func(w http.ResponseWriter, r *http.Request) {
+			GetSecretListHandler(w, r, gophekeeperService)
+		})
+		r.Get("/api/secret/{id}", func(w http.ResponseWriter, r *http.Request) {
+			GetSecretHandler(w, r, gophekeeperService)
 		})
 	})
 

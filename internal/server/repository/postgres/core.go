@@ -15,9 +15,8 @@ import (
 
 type Storage interface {
 	Save(shortURL, originalURL, userID string) (string, error)
-	Get(shortURL string) (originalURL string, found bool, deleted bool)
-	GetList(userID int) ([]UserDataDB, error)
-	Delete(doneCh chan struct{}, inputCh chan string, userID string) chan error
+	Get(userID, secretID int) (SecretDB, error)
+	GetList(userID int) ([]SecretDB, error)
 	Close() error
 	Ping(ctx context.Context) error
 	SaveUser(user UserDB) (int, error)

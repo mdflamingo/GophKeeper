@@ -19,20 +19,29 @@ import (
 
 var ErrConflict = errors.New("conflict: duplicate entry")
 var ErrNotFound = errors.New("obj not found")
-var ErrInsufficientFunds = errors.New("insufficient funds")
-
-// Delete implements [Storage].
-func (d *DBStorage) Delete(doneCh chan struct{}, inputCh chan string, userID string) chan error {
-	panic("unimplemented")
-}
 
 // Get implements [Storage].
-func (d *DBStorage) Get(shortURL string) (originalURL string, found bool, deleted bool) {
-	panic("unimplemented")
+func (d *DBStorage) Get(userID, secrertID int) (SecretDB, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	var secret SecretDB
+
+	err := d.pool.QueryRow(
+		ctx,
+		`SELECT id, data_type, metadata, created_at FROM user_data WHERE user_id = $1 and id = $2`,
+		userID, secrertID).Scan(&secret.ID, &secret.MetaData, &secret.DataType, &secret.CreatedAt)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return SecretDB{}, ErrNotFound
+		}
+		return SecretDB{}, fmt.Errorf("failed to get secret: %w", err)
+	}
+	return secret, nil
 }
 
 // GetList implements [Storage].
-func (d *DBStorage) GetList(userID int) ([]UserDataDB, error) {
+func (d *DBStorage) GetList(userID int) ([]SecretDB, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
@@ -42,7 +51,7 @@ func (d *DBStorage) GetList(userID int) ([]UserDataDB, error) {
 	}
 
 	rows, err := pool.Query(ctx,
-		"SELECT data_type, metadata, created_at FROM user_data WHERE user_id = $1",
+		"SELECT id, data_type, metadata, created_at FROM user_data WHERE user_id = $1",
 		userID)
 
 	if err != nil {
@@ -50,12 +59,12 @@ func (d *DBStorage) GetList(userID int) ([]UserDataDB, error) {
 	}
 	defer rows.Close()
 
-	var items []UserDataDB
+	var items []SecretDB
 
 	for rows.Next() {
-		var item UserDataDB
+		var item SecretDB
 
-		err := rows.Scan(&item.DataType, &item.MetaData, &item.CreatedAt)
+		err := rows.Scan(&item.DataType, &item.MetaData, &item.CreatedAt, &item.ID)
 		if err != nil {
 			return nil, fmt.Errorf("data scan error: %w", err)
 		}

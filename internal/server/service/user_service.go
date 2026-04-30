@@ -32,7 +32,7 @@ func (s *UserService) Register(user model.AuthUser) (int, error) {
 
 	hashedPassword := hashPassword(user.Password)
 
-	userDB := model.UserDB{
+	userDB := postgres.UserDB{
 		Login:    user.Login,
 		Password: hashedPassword,
 	}
@@ -55,7 +55,7 @@ func (s *UserService) Login(user model.AuthUser) (int, error) {
 
 	hashedPassword := hashPassword(user.Password)
 
-	userDB := model.UserDB{
+	userDB := postgres.UserDB{
 		Login:    user.Login,
 		Password: hashedPassword,
 	}
