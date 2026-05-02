@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -18,23 +19,19 @@ const userIDKey contextKey = "userID"
 func AuthMiddleware(secretKey string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			cookie, err := r.Cookie("token")
-			if err != nil {
-				if errors.Is(err, http.ErrNoCookie) {
-					logger.Log.Debug("no auth cookie found")
-					http.Error(w, "Unauthorized", http.StatusUnauthorized)
-					return
-				}
-				logger.Log.Error("error reading cookie", zap.Error(err))
-				http.Error(w, "Internal server error", http.StatusInternalServerError)
+			authHeader := r.Header.Get("Authorization")
+			if authHeader == "" {
+				logger.Log.Debug("no authorization header found")
+				http.Error(w, "Unauthorized: missing authorization header", http.StatusUnauthorized)
 				return
 			}
 
-			tokenString := cookie.Value
+			tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+
 			userID, err := validateJWT(tokenString, secretKey)
 			if err != nil {
 				logger.Log.Warn("invalid token", zap.Error(err))
-				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				http.Error(w, "Unauthorized: invalid token", http.StatusUnauthorized)
 				return
 			}
 

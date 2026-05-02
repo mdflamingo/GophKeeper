@@ -12,6 +12,7 @@ var (
 	ErrInvalidUserID   = errors.New("invalid user ID: cannot be zero")
 	ErrInvalidSecretID = errors.New("invalid secret ID: cannot be zero")
 	ErrSecretNotFound  = errors.New("secret not found")
+	ErrSecretSave      = errors.New("secret not saved")
 )
 
 type GopheKeeperService struct {
@@ -43,7 +44,7 @@ func (s *GopheKeeperService) GetSecrets(userID int) (*model.SecretListResponse, 
 	for i, secret := range secrets {
 		result[i] = model.SecretResponse{
 			ID:        secret.ID,
-			DataType:  postgres.DataType(secret.DataType),
+			DataType:  model.DataType(secret.DataType),
 			MetaData:  secret.MetaData,
 			CreatedAt: secret.CreatedAt,
 		}
@@ -68,7 +69,7 @@ func (s *GopheKeeperService) GetOneSecret(userID, secretID int) (*model.SecretRe
 
 	secret, err := s.repo.Get(userID, secretID)
 	if err != nil {
-		if errors.Is(err, errors.New("no rows in result set")) {
+		if errors.Is(err, postgres.ErrNotFound) {
 			return nil, ErrSecretNotFound
 		}
 		return nil, fmt.Errorf("failed to get secret from repository: %w", err)
@@ -76,10 +77,23 @@ func (s *GopheKeeperService) GetOneSecret(userID, secretID int) (*model.SecretRe
 
 	response := &model.SecretResponse{
 		ID:        secret.ID,
-		DataType:  postgres.DataType(secret.DataType),
+		DataType:  model.DataType(secret.DataType),
 		MetaData:  secret.MetaData,
 		CreatedAt: secret.CreatedAt,
 	}
 
 	return response, nil
+}
+
+// SaveOneSecret сохраняет секрет
+func (s *GopheKeeperService) SaveOneSecret(secret model.SecretCreateRequest, userID int) error {
+	if userID == 0 {
+		return ErrInvalidUserID
+	}
+	err := s.repo.Save(secret, userID)
+	if err != nil {
+		return ErrSecretSave
+	}
+
+	return nil
 }

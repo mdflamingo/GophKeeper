@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strconv"
@@ -24,9 +25,9 @@ import (
 // @Produce      json
 // @Param        request body model.AuthUser true "Данные для регистрации"
 // @Success      200 {object} model.AuthResponse "Успешная регистрация, токен в cookie и теле ответа"
-// @Failure      400 {object} map[string]string "Неверный запрос или пустые поля"
-// @Failure      409 {object} map[string]string "Пользователь с таким логином уже существует"
-// @Failure      500 {object} map[string]string "Внутренняя ошибка сервера"
+// @Failure      400 "Неверный запрос или пустые поля"
+// @Failure      409 "Пользователь с таким логином уже существует"
+// @Failure      500 "Внутренняя ошибка сервера"
 // @Router       /user/register [post]
 func RegisterHandler(w http.ResponseWriter, r *http.Request, svc *service.UserService, secretKey string) {
 	body, err := io.ReadAll(r.Body)
@@ -56,8 +57,6 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request, svc *service.UserSe
 		return
 	}
 
-	SetTokenCookie(w, token)
-
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	resp := model.AuthResponse{Token: token}
@@ -73,9 +72,9 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request, svc *service.UserSe
 // @Produce      json
 // @Param        request body model.AuthUser true "Учетные данные пользователя"
 // @Success      200 {object} model.AuthResponse "Успешный вход, токен в cookie и теле ответа"
-// @Failure      400 {object} map[string]string "Неверный запрос или пустые поля"
-// @Failure      401 {object} map[string]string "Неверный логин или пароль"
-// @Failure      500 {object} map[string]string "Внутренняя ошибка сервера"
+// @Failure      400 "Неверный запрос или пустые поля"
+// @Failure      401 "Неверный логин или пароль"
+// @Failure      500 "Внутренняя ошибка сервера"
 // @Router       /user/login [post]
 func LoginHandler(w http.ResponseWriter, r *http.Request, svc *service.UserService, secretKey string) {
 	body, err := io.ReadAll(r.Body)
@@ -105,8 +104,6 @@ func LoginHandler(w http.ResponseWriter, r *http.Request, svc *service.UserServi
 		return
 	}
 
-	SetTokenCookie(w, token)
-
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	resp := model.AuthResponse{Token: token}
@@ -120,12 +117,11 @@ func LoginHandler(w http.ResponseWriter, r *http.Request, svc *service.UserServi
 // @Tags         secrets
 // @Accept       json
 // @Produce      json
-// @Security     ApiKeyAuth
-// @Success      200 {array} postgres.UserDataDB "Успешное получение списка секретов"
+// @Security     BearerAuth
+// @Success      200 {object} model.SecretListResponse "Успешное получение списка секретов"
 // @Success      204 "Нет содержимого (список секретов пуст)"
-// @Failure      400 {object} map[string]string "Неверный запрос"
-// @Failure      401 {object} map[string]string "Пользователь не авторизован"
-// @Failure      500 {object} map[string]string "Внутренняя ошибка сервера"
+// @Failure      401 "Пользователь не авторизован"
+// @Failure      500 "Внутренняя ошибка сервера"
 // @Router       /secret/list [get]
 func GetSecretListHandler(w http.ResponseWriter, r *http.Request, svc *service.GopheKeeperService) {
 	userID, err := GetUserIDFromRequest(r)
@@ -164,13 +160,14 @@ func GetSecretListHandler(w http.ResponseWriter, r *http.Request, svc *service.G
 // @Tags         secrets
 // @Accept       json
 // @Produce      json
-// @Security     ApiKeyAuth
-// @Success      200  postgres.UserDataDB "Успешное получение секрета"
-// @Success      204 "Секрет не найден"
-// @Failure      400 {object} map[string]string "Неверный запрос"
-// @Failure      401 {object} map[string]string "Пользователь не авторизован"
-// @Failure      500 {object} map[string]string "Внутренняя ошибка сервера"
-// @Router       /secret [get]
+// @Security     BearerAuth
+// @Param        id path int true "ID секрета"
+// @Success      200 {object} model.SecretResponse "Успешное получение секрета"
+// @Failure      204 "Секрет не найден"
+// @Failure      400 "Неверный запрос"
+// @Failure      401 "Пользователь не авторизован"
+// @Failure      500 "Внутренняя ошибка сервера"
+// @Router       /secret/{id} [get]
 func GetSecretHandler(w http.ResponseWriter, r *http.Request, svc *service.GopheKeeperService) {
 	userID, err := GetUserIDFromRequest(r)
 	if err != nil {
@@ -194,9 +191,16 @@ func GetSecretHandler(w http.ResponseWriter, r *http.Request, svc *service.Gophe
 
 	item, err := svc.GetOneSecret(userID, secretID)
 	if err != nil {
-		logger.Log.Error("failed to get user secrets", zap.Error(err))
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
+		if errors.Is(err, service.ErrSecretNotFound) {
+			logger.Log.Error("secret not found", zap.Error(err))
+			http.Error(w, http.StatusText(http.StatusNoContent), http.StatusNoContent)
+			return
+		} else {
+			logger.Log.Error("failed to get user secrets", zap.Error(err))
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
+
 	}
 	respJSON, err := json.Marshal(item)
 	if err != nil {
@@ -208,6 +212,53 @@ func GetSecretHandler(w http.ResponseWriter, r *http.Request, svc *service.Gophe
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write(respJSON)
+}
+
+// SaveSecretHandler godoc
+// @Summary      Создание секрета пользователя
+// @Description  Создает секрет текущего авторизованного пользователя
+// @Param        request body model.SecretCreateRequest true "Данные секрета"
+// @Tags         secrets
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Success      201  "Успешное создание секрета"
+// @Failure      400  "Неверный запрос"
+// @Failure      401  "Пользователь не авторизован"
+// @Failure      500  "Внутренняя ошибка сервера"
+// @Router       /secret [post]
+func SaveSecretHandler(w http.ResponseWriter, r *http.Request, svc *service.GopheKeeperService) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		logger.Log.Error("failed to read request body", zap.Error(err))
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		return
+	}
+
+	var inputSecret model.SecretCreateRequest
+	if err := json.Unmarshal(body, &inputSecret); err != nil {
+		logger.Log.Warn("invalid request body", zap.Error(err))
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	userID, err := GetUserIDFromRequest(r)
+	if err != nil {
+		logger.Log.Warn("failed to get user ID", zap.Error(err))
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		return
+	}
+
+	err = svc.SaveOneSecret(inputSecret, userID)
+
+	if err != nil {
+		logger.Log.Error("failed to save secret", zap.Error(err))
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
 }
 
 // HealthCheck godoc

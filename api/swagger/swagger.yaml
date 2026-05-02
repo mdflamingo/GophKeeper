@@ -22,6 +22,52 @@ definitions:
     - login
     - password
     type: object
+  github_com_mdflamingo_GophKeeper_internal_model.DataType:
+    enum:
+    - TEXT
+    - CARD
+    - FILE
+    - CREDENTIALS
+    type: string
+    x-enum-varnames:
+    - TEXT
+    - CARD
+    - FILE
+    - CREDENTIALS
+  github_com_mdflamingo_GophKeeper_internal_model.SecretCreateRequest:
+    properties:
+      data:
+        type: object
+      data_type:
+        allOf:
+        - $ref: '#/definitions/github_com_mdflamingo_GophKeeper_internal_model.DataType'
+        example: CREDENTIALS
+    type: object
+  github_com_mdflamingo_GophKeeper_internal_model.SecretListResponse:
+    properties:
+      count:
+        example: 5
+        type: integer
+      secrets:
+        items:
+          $ref: '#/definitions/github_com_mdflamingo_GophKeeper_internal_model.SecretResponse'
+        type: array
+    type: object
+  github_com_mdflamingo_GophKeeper_internal_model.SecretResponse:
+    properties:
+      created_at:
+        example: "2024-01-01T12:00:00Z"
+        type: string
+      data_type:
+        allOf:
+        - $ref: '#/definitions/github_com_mdflamingo_GophKeeper_internal_model.DataType'
+        example: CREDENTIALS
+      id:
+        example: 5
+        type: integer
+      meta_data:
+        type: object
+    type: object
 host: localhost:8080
 info:
   contact:
@@ -52,6 +98,89 @@ paths:
       summary: Проверка здоровья сервера
       tags:
       - monitoring
+  /secret:
+    post:
+      consumes:
+      - application/json
+      description: Создает секрет текущего авторизованного пользователя
+      parameters:
+      - description: Данные секрета
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_mdflamingo_GophKeeper_internal_model.SecretCreateRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Успешное создание секрета
+        "400":
+          description: Неверный запрос
+        "401":
+          description: Пользователь не авторизован
+        "500":
+          description: Внутренняя ошибка сервера
+      security:
+      - BearerAuth: []
+      summary: Создание секрета пользователя
+      tags:
+      - secrets
+  /secret/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Возвращает секрет текущего авторизованного пользователя по id секрета
+      parameters:
+      - description: ID секрета
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Успешное получение секрета
+          schema:
+            $ref: '#/definitions/github_com_mdflamingo_GophKeeper_internal_model.SecretResponse'
+        "204":
+          description: Секрет не найден
+        "400":
+          description: Неверный запрос
+        "401":
+          description: Пользователь не авторизован
+        "500":
+          description: Внутренняя ошибка сервера
+      security:
+      - BearerAuth: []
+      summary: Получение секрета пользователя
+      tags:
+      - secrets
+  /secret/list:
+    get:
+      consumes:
+      - application/json
+      description: Возвращает список всех сохраненных секретов (данных) текущего авторизованного
+        пользователя
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Успешное получение списка секретов
+          schema:
+            $ref: '#/definitions/github_com_mdflamingo_GophKeeper_internal_model.SecretListResponse'
+        "204":
+          description: Нет содержимого (список секретов пуст)
+        "401":
+          description: Пользователь не авторизован
+        "500":
+          description: Внутренняя ошибка сервера
+      security:
+      - BearerAuth: []
+      summary: Получение списка секретов пользователя
+      tags:
+      - secrets
   /user/login:
     post:
       consumes:
@@ -73,22 +202,10 @@ paths:
             $ref: '#/definitions/github_com_mdflamingo_GophKeeper_internal_model.AuthResponse'
         "400":
           description: Неверный запрос или пустые поля
-          schema:
-            additionalProperties:
-              type: string
-            type: object
         "401":
           description: Неверный логин или пароль
-          schema:
-            additionalProperties:
-              type: string
-            type: object
         "500":
           description: Внутренняя ошибка сервера
-          schema:
-            additionalProperties:
-              type: string
-            type: object
       summary: Аутентификация пользователя
       tags:
       - auth
@@ -113,22 +230,10 @@ paths:
             $ref: '#/definitions/github_com_mdflamingo_GophKeeper_internal_model.AuthResponse'
         "400":
           description: Неверный запрос или пустые поля
-          schema:
-            additionalProperties:
-              type: string
-            type: object
         "409":
           description: Пользователь с таким логином уже существует
-          schema:
-            additionalProperties:
-              type: string
-            type: object
         "500":
           description: Внутренняя ошибка сервера
-          schema:
-            additionalProperties:
-              type: string
-            type: object
       summary: Регистрация нового пользователя
       tags:
       - auth

@@ -62,12 +62,24 @@ func NewRouter(conf *config.Config, storage postgres.Storage) *chi.Mux {
 		r.Get("/api/secret/{id}", func(w http.ResponseWriter, r *http.Request) {
 			GetSecretHandler(w, r, gophekeeperService)
 		})
+
+		r.Post("/api/secret", func(w http.ResponseWriter, r *http.Request) {
+			SaveSecretHandler(w, r, gophekeeperService)
+		})
 	})
 
 	// Swagger документация
 	r.Get("/swagger/*", httpSwagger.Handler(
 		httpSwagger.URL("/swagger/doc.json"),
+		httpSwagger.UIConfig(map[string]string{
+			"persistAuthorization": "true",
+		}),
 	))
 
+	// r.Get("/swagger/doc.json", func(w http.ResponseWriter, r *http.Request) {
+	// 	doc, _ := swag.ReadDoc()
+	// 	w.Header().Set("Content-Type", "application/json")
+	// 	w.Write([]byte(doc))
+	// })
 	return r
 }

@@ -34,6 +34,7 @@ import (
 // @in header
 // @name Authorization
 // @description Type "Bearer" followed by a space and JWT token.
+// @import github.com/mdflamingo/GophKeeper/internal/model
 
 func main() {
 	conf := config.GetConfig()

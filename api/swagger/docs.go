@@ -49,6 +49,137 @@ const docTemplate = `{
                 }
             }
         },
+        "/secret": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Создает секрет текущего авторизованного пользователя",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "secrets"
+                ],
+                "summary": "Создание секрета пользователя",
+                "parameters": [
+                    {
+                        "description": "Данные секрета",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_mdflamingo_GophKeeper_internal_model.SecretCreateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Успешное создание секрета"
+                    },
+                    "400": {
+                        "description": "Неверный запрос"
+                    },
+                    "401": {
+                        "description": "Пользователь не авторизован"
+                    },
+                    "500": {
+                        "description": "Внутренняя ошибка сервера"
+                    }
+                }
+            }
+        },
+        "/secret/list": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Возвращает список всех сохраненных секретов (данных) текущего авторизованного пользователя",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "secrets"
+                ],
+                "summary": "Получение списка секретов пользователя",
+                "responses": {
+                    "200": {
+                        "description": "Успешное получение списка секретов",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_mdflamingo_GophKeeper_internal_model.SecretListResponse"
+                        }
+                    },
+                    "204": {
+                        "description": "Нет содержимого (список секретов пуст)"
+                    },
+                    "401": {
+                        "description": "Пользователь не авторизован"
+                    },
+                    "500": {
+                        "description": "Внутренняя ошибка сервера"
+                    }
+                }
+            }
+        },
+        "/secret/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Возвращает секрет текущего авторизованного пользователя по id секрета",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "secrets"
+                ],
+                "summary": "Получение секрета пользователя",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID секрета",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Успешное получение секрета",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_mdflamingo_GophKeeper_internal_model.SecretResponse"
+                        }
+                    },
+                    "204": {
+                        "description": "Секрет не найден"
+                    },
+                    "400": {
+                        "description": "Неверный запрос"
+                    },
+                    "401": {
+                        "description": "Пользователь не авторизован"
+                    },
+                    "500": {
+                        "description": "Внутренняя ошибка сервера"
+                    }
+                }
+            }
+        },
         "/user/login": {
             "post": {
                 "description": "Вход в систему с получением JWT токена",
@@ -81,31 +212,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Неверный запрос или пустые поля",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
+                        "description": "Неверный запрос или пустые поля"
                     },
                     "401": {
-                        "description": "Неверный логин или пароль",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
+                        "description": "Неверный логин или пароль"
                     },
                     "500": {
-                        "description": "Внутренняя ошибка сервера",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
+                        "description": "Внутренняя ошибка сервера"
                     }
                 }
             }
@@ -142,31 +255,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Неверный запрос или пустые поля",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
+                        "description": "Неверный запрос или пустые поля"
                     },
                     "409": {
-                        "description": "Пользователь с таким логином уже существует",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
+                        "description": "Пользователь с таким логином уже существует"
                     },
                     "500": {
-                        "description": "Внутренняя ошибка сервера",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
+                        "description": "Внутренняя ошибка сервера"
                     }
                 }
             }
@@ -200,6 +295,76 @@ const docTemplate = `{
                     "maxLength": 100,
                     "minLength": 6,
                     "example": "strongpassword123"
+                }
+            }
+        },
+        "github_com_mdflamingo_GophKeeper_internal_model.DataType": {
+            "type": "string",
+            "enum": [
+                "TEXT",
+                "CARD",
+                "FILE",
+                "CREDENTIALS"
+            ],
+            "x-enum-varnames": [
+                "TEXT",
+                "CARD",
+                "FILE",
+                "CREDENTIALS"
+            ]
+        },
+        "github_com_mdflamingo_GophKeeper_internal_model.SecretCreateRequest": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "object"
+                },
+                "data_type": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/github_com_mdflamingo_GophKeeper_internal_model.DataType"
+                        }
+                    ],
+                    "example": "CREDENTIALS"
+                }
+            }
+        },
+        "github_com_mdflamingo_GophKeeper_internal_model.SecretListResponse": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer",
+                    "example": 5
+                },
+                "secrets": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_mdflamingo_GophKeeper_internal_model.SecretResponse"
+                    }
+                }
+            }
+        },
+        "github_com_mdflamingo_GophKeeper_internal_model.SecretResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string",
+                    "example": "2024-01-01T12:00:00Z"
+                },
+                "data_type": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/github_com_mdflamingo_GophKeeper_internal_model.DataType"
+                        }
+                    ],
+                    "example": "CREDENTIALS"
+                },
+                "id": {
+                    "type": "integer",
+                    "example": 5
+                },
+                "meta_data": {
+                    "type": "object"
                 }
             }
         }
