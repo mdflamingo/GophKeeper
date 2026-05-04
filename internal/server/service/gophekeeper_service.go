@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/mdflamingo/GophKeeper/internal/model"
@@ -32,10 +34,11 @@ func NewGopheKeeperService(repo *postgres.DBStorage, minio minio.FileStorage) *G
 }
 
 // GetSecrets возвращает список секретов в виде response моделей
-func (s *GopheKeeperService) GetSecrets(userID int) (*model.SecretListResponse, error) {
+func (s *GopheKeeperService) GetSecrets(userID int, bucketName string) (*model.SecretListResponse, error) {
 	if userID == 0 {
 		return nil, ErrInvalidUserID
 	}
+
 	secrets, err := s.repo.GetList(userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get secrets from repository: %w", err)
@@ -49,25 +52,53 @@ func (s *GopheKeeperService) GetSecrets(userID int) (*model.SecretListResponse, 
 	}
 
 	result := make([]model.SecretResponse, len(secrets))
+
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+
+	errorsChan := make(chan error, len(secrets))
+
 	for i, secret := range secrets {
-		result[i] = model.SecretResponse{
-			ID:        secret.ID,
-			DataType:  model.DataType(secret.DataType),
-			MetaData:  secret.MetaData,
-			CreatedAt: secret.CreatedAt,
-		}
+		wg.Add(1)
+		go func(index int, sec postgres.SecretDB) {
+			defer wg.Done()
+
+			response := model.SecretResponse{
+				ID:        sec.ID,
+				DataType:  model.DataType(sec.DataType),
+				MetaData:  sec.MetaData,
+				CreatedAt: sec.CreatedAt,
+			}
+
+			fileName := getUniqueFileName(sec.MetaData)
+			if fileName != "" {
+				fileResponse, err := processFile(s.minio, sec, fileName, bucketName)
+				if err != nil {
+					errorsChan <- fmt.Errorf("failed to process file for secret %d: %w", sec.ID, err)
+				} else {
+					response = *fileResponse
+				}
+			}
+
+			mu.Lock()
+			result[index] = response
+			mu.Unlock()
+		}(i, secret)
 	}
+
+	wg.Wait()
+	close(errorsChan)
 
 	response := &model.SecretListResponse{
 		Secrets: result,
-		Count:   len(secrets),
+		Count:   len(result),
 	}
 
 	return response, nil
 }
 
 // GetOneSecret возвращает секрет в виде response модели
-func (s *GopheKeeperService) GetOneSecret(userID, secretID int) (*model.SecretResponse, error) {
+func (s *GopheKeeperService) GetOneSecret(userID, secretID int, bucketName string) (*model.SecretResponse, error) {
 	if userID == 0 {
 		return nil, ErrInvalidUserID
 	}
@@ -81,6 +112,16 @@ func (s *GopheKeeperService) GetOneSecret(userID, secretID int) (*model.SecretRe
 			return nil, ErrSecretNotFound
 		}
 		return nil, fmt.Errorf("failed to get secret from repository: %w", err)
+	}
+
+	fileName := getUniqueFileName(secret.MetaData)
+	if fileName != "" {
+		response, err := processFile(s.minio, secret, fileName, bucketName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get secret from repository: %w", err)
+		}
+		return response, nil
+
 	}
 
 	response := &model.SecretResponse{
@@ -158,17 +199,6 @@ func (s *GopheKeeperService) SaveFile(
 	return nil
 }
 
-func generateUniqueFileName(originalName string) string {
-	ext := filepath.Ext(originalName)
-	nameWithoutExt := originalName[0 : len(originalName)-len(ext)]
-
-	return fmt.Sprintf("%s_%s%s",
-		uuid.New().String(),
-		nameWithoutExt,
-		ext)
-
-}
-
 func enrichMetadata(existingJSON json.RawMessage, newFields map[string]interface{}) (json.RawMessage, error) {
 	var metadataMap map[string]interface{}
 
@@ -185,4 +215,64 @@ func enrichMetadata(existingJSON json.RawMessage, newFields map[string]interface
 	}
 
 	return json.Marshal(metadataMap)
+}
+
+func generateUniqueFileName(originalName string) string {
+	ext := filepath.Ext(originalName)
+	nameWithoutExt := originalName[0 : len(originalName)-len(ext)]
+
+	return fmt.Sprintf("%s_%s%s",
+		uuid.New().String(),
+		nameWithoutExt,
+		ext)
+
+}
+
+func getUniqueFileName(metadata []byte) string {
+	var data map[string]interface{}
+	if err := json.Unmarshal(metadata, &data); err != nil {
+		return ""
+	}
+
+	value, exists := data["unique_file_name"]
+	if !exists {
+		return ""
+	}
+
+	strValue, ok := value.(string)
+	if !ok {
+		return ""
+	}
+
+	return strValue
+}
+
+func processFile(minio minio.FileStorage, secret postgres.SecretDB, fileName string, bucketName string) (*model.SecretResponse, error) {
+	modifiedMetadata := make(map[string]interface{})
+	if err := json.Unmarshal(secret.MetaData, &modifiedMetadata); err != nil {
+		return nil, fmt.Errorf("failed to parse metadata: %w", err)
+	}
+
+	presignedURL, err := minio.GetPresignedURL(bucketName, fileName, 15*time.Minute)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate presigned URL: %w", err)
+	}
+
+	delete(modifiedMetadata, "unique_file_name")
+	modifiedMetadata["download_url"] = presignedURL
+	modifiedMetadata["url_expires_at"] = time.Now().Add(15 * time.Minute).Format(time.RFC3339)
+
+	metadataJSON, err := json.Marshal(modifiedMetadata)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal metadata: %w", err)
+	}
+
+	response := &model.SecretResponse{
+		ID:        secret.ID,
+		DataType:  model.DataType(secret.DataType),
+		MetaData:  metadataJSON,
+		CreatedAt: secret.CreatedAt,
+	}
+
+	return response, nil
 }

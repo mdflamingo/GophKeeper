@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/mdflamingo/GophKeeper/internal/logger"
 	"github.com/minio/minio-go/v7"
@@ -59,4 +60,19 @@ func (s *MinioStorage) Ping(ctx context.Context) error {
 		return fmt.Errorf("minio ping failed: %w", err)
 	}
 	return nil
+}
+
+func (m *MinioStorage) GetPresignedURL(bucketName, fileName string, expiry time.Duration) (string, error) {
+	presignedURL, err := m.client.PresignedGetObject(
+		context.Background(),
+		bucketName,
+		fileName,
+		expiry,
+		nil,
+	)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate presigned URL: %w", err)
+	}
+
+	return presignedURL.String(), nil
 }

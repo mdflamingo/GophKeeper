@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/mdflamingo/GophKeeper/internal/config"
 	"github.com/mdflamingo/GophKeeper/internal/logger"
@@ -15,6 +16,7 @@ import (
 type FileStorage interface {
 	UploadFile(ctx context.Context, file io.Reader, bucketName, fileName string, fileSize int64) error
 	DownloadFile(bucketName, fileName string) (io.ReadCloser, error)
+	GetPresignedURL(bucketName, fileName string, expiry time.Duration) (string, error)
 	Close() error
 	Ping(ctx context.Context) error
 }

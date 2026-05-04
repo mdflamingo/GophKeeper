@@ -123,7 +123,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request, svc *service.UserServi
 // @Failure      401 "Пользователь не авторизован"
 // @Failure      500 "Внутренняя ошибка сервера"
 // @Router       /secret/list [get]
-func GetSecretListHandler(w http.ResponseWriter, r *http.Request, svc *service.GopheKeeperService) {
+func GetSecretListHandler(w http.ResponseWriter, r *http.Request, svc *service.GopheKeeperService, bucketName string) {
 	userID, err := GetUserIDFromRequest(r)
 	if err != nil {
 		logger.Log.Warn("failed to get user ID", zap.Error(err))
@@ -131,7 +131,7 @@ func GetSecretListHandler(w http.ResponseWriter, r *http.Request, svc *service.G
 		return
 	}
 
-	secrets, err := svc.GetSecrets(userID)
+	secrets, err := svc.GetSecrets(userID, bucketName)
 	if err != nil {
 		logger.Log.Error("failed to get user secrets", zap.Error(err))
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
@@ -168,7 +168,7 @@ func GetSecretListHandler(w http.ResponseWriter, r *http.Request, svc *service.G
 // @Failure      401 "Пользователь не авторизован"
 // @Failure      500 "Внутренняя ошибка сервера"
 // @Router       /secret/{id} [get]
-func GetSecretHandler(w http.ResponseWriter, r *http.Request, svc *service.GopheKeeperService) {
+func GetSecretHandler(w http.ResponseWriter, r *http.Request, svc *service.GopheKeeperService, bucketName string) {
 	userID, err := GetUserIDFromRequest(r)
 	if err != nil {
 		logger.Log.Warn("failed to get user ID", zap.Error(err))
@@ -189,7 +189,7 @@ func GetSecretHandler(w http.ResponseWriter, r *http.Request, svc *service.Gophe
 		return
 	}
 
-	item, err := svc.GetOneSecret(userID, secretID)
+	item, err := svc.GetOneSecret(userID, secretID, bucketName)
 	if err != nil {
 		if errors.Is(err, service.ErrSecretNotFound) {
 			logger.Log.Error("secret not found", zap.Error(err))

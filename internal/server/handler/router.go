@@ -58,10 +58,10 @@ func NewRouter(conf *config.Config, storage postgres.Storage, minio minio.FileSt
 		r.Use(AuthMiddleware(conf.SecretKey))
 
 		r.Get("/api/secret/list", func(w http.ResponseWriter, r *http.Request) {
-			GetSecretListHandler(w, r, gophekeeperService)
+			GetSecretListHandler(w, r, gophekeeperService, conf.Minio.MinioBucket)
 		})
 		r.Get("/api/secret/{id}", func(w http.ResponseWriter, r *http.Request) {
-			GetSecretHandler(w, r, gophekeeperService)
+			GetSecretHandler(w, r, gophekeeperService, conf.Minio.MinioBucket)
 		})
 
 		r.Post("/api/secret", func(w http.ResponseWriter, r *http.Request) {
