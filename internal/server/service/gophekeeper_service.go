@@ -1,10 +1,16 @@
 package service
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"path/filepath"
 
+	"github.com/google/uuid"
 	"github.com/mdflamingo/GophKeeper/internal/model"
+	"github.com/mdflamingo/GophKeeper/internal/server/repository/minio"
 	"github.com/mdflamingo/GophKeeper/internal/server/repository/postgres"
 )
 
@@ -13,14 +19,16 @@ var (
 	ErrInvalidSecretID = errors.New("invalid secret ID: cannot be zero")
 	ErrSecretNotFound  = errors.New("secret not found")
 	ErrSecretSave      = errors.New("secret not saved")
+	ErrFileSave        = errors.New("file not sent to minio")
 )
 
 type GopheKeeperService struct {
-	repo *postgres.DBStorage
+	repo  *postgres.DBStorage
+	minio minio.FileStorage
 }
 
-func NewGopheKeeperService(repo *postgres.DBStorage) *GopheKeeperService {
-	return &GopheKeeperService{repo: repo}
+func NewGopheKeeperService(repo *postgres.DBStorage, minio minio.FileStorage) *GopheKeeperService {
+	return &GopheKeeperService{repo: repo, minio: minio}
 }
 
 // GetSecrets возвращает список секретов в виде response моделей
@@ -96,4 +104,85 @@ func (s *GopheKeeperService) SaveOneSecret(secret model.SecretCreateRequest, use
 	}
 
 	return nil
+}
+
+func (s *GopheKeeperService) SaveFile(
+	ctx context.Context,
+	file io.Reader,
+	fileName string,
+	userID int,
+	bucketName string,
+	fileSize int64,
+	inputSecret model.SecretCreateRequest) error {
+	if userID == 0 {
+		return ErrInvalidUserID
+	}
+
+	uniqueFileName := generateUniqueFileName(fileName)
+
+	err := s.minio.UploadFile(ctx, file, bucketName, uniqueFileName, fileSize)
+	if err != nil {
+		return fmt.Errorf("failed to upload file to minio: %w", err)
+	}
+
+	if inputSecret.Data == nil || len(inputSecret.Data) == 0 {
+		newFields := map[string]interface{}{
+			"original_file_name": fileName,
+			"unique_file_name":   uniqueFileName,
+		}
+		metaBytes, err := enrichMetadata(nil, newFields)
+		if err != nil {
+			// _ = s.minio.DeleteFile(ctx, bucketName, fileName)
+			return fmt.Errorf("failed to create metadata: %w", err)
+		}
+		inputSecret.Data = metaBytes
+	} else {
+		newFields := map[string]interface{}{
+			"original_file_name": fileName,
+			"unique_file_name":   uniqueFileName,
+		}
+		enrichedMeta, err := enrichMetadata(inputSecret.Data, newFields)
+		if err != nil {
+			// _ = s.minio.DeleteFile(ctx, bucketName, fileName)
+			return fmt.Errorf("failed to enrich metadata: %w", err)
+		}
+		inputSecret.Data = enrichedMeta
+	}
+
+	err = s.repo.Save(inputSecret, userID)
+	if err != nil {
+		// _ = s.minio.DeleteFile(ctx, bucketName, fileName)
+		return ErrSecretSave
+	}
+
+	return nil
+}
+
+func generateUniqueFileName(originalName string) string {
+	ext := filepath.Ext(originalName)
+	nameWithoutExt := originalName[0 : len(originalName)-len(ext)]
+
+	return fmt.Sprintf("%s_%s%s",
+		uuid.New().String(),
+		nameWithoutExt,
+		ext)
+
+}
+
+func enrichMetadata(existingJSON json.RawMessage, newFields map[string]interface{}) (json.RawMessage, error) {
+	var metadataMap map[string]interface{}
+
+	if existingJSON != nil && len(existingJSON) > 0 {
+		if err := json.Unmarshal(existingJSON, &metadataMap); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal existing metadata: %w", err)
+		}
+	} else {
+		metadataMap = make(map[string]interface{})
+	}
+
+	for key, value := range newFields {
+		metadataMap[key] = value
+	}
+
+	return json.Marshal(metadataMap)
 }

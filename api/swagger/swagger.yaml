@@ -157,6 +157,50 @@ paths:
       summary: Получение секрета пользователя
       tags:
       - secrets
+  /secret/file:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Загружает файл как секрет пользователя
+      parameters:
+      - description: Файл для загрузки
+        in: formData
+        name: file
+        required: true
+        type: file
+      - default: FILE
+        description: Тип секрета
+        enum:
+        - TEXT
+        - CARD
+        - FILE
+        - CREDENTIALS
+        in: formData
+        name: data_type
+        required: true
+        type: string
+      - description: Данные секрета в JSON формате
+        example: '{"login":"user","password":"pass"}'
+        in: formData
+        name: data
+        required: true
+        type: string
+      responses:
+        "201":
+          description: Успешная загрузка файла
+        "400":
+          description: Неверный запрос
+        "401":
+          description: Пользователь не авторизован
+        "413":
+          description: Файл слишком большой
+        "500":
+          description: Внутренняя ошибка сервера
+      security:
+      - BearerAuth: []
+      summary: Загрузка файлового секрета
+      tags:
+      - secrets
   /secret/list:
     get:
       consumes:

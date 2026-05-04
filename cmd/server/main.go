@@ -12,6 +12,7 @@ import (
 	"github.com/mdflamingo/GophKeeper/internal/config"
 	"github.com/mdflamingo/GophKeeper/internal/logger"
 	"github.com/mdflamingo/GophKeeper/internal/server/handler"
+	"github.com/mdflamingo/GophKeeper/internal/server/repository/minio"
 	"github.com/mdflamingo/GophKeeper/internal/server/repository/postgres"
 	"go.uber.org/zap"
 )
@@ -52,8 +53,11 @@ func run(conf *config.Config) error {
 	if errStorage != nil {
 		logger.Log.Fatal("Failed to create storage", zap.Error(errStorage))
 	}
-
-	r := handler.NewRouter(conf, storage)
+	minioStorage, err := minio.ConnectMinio(&conf.Minio)
+	if err != nil {
+		logger.Log.Fatal("Failed to connect to MinIO", zap.Error(err))
+	}
+	r := handler.NewRouter(conf, storage, minioStorage)
 
 	server := &http.Server{
 		ReadTimeout:  30 * time.Second,

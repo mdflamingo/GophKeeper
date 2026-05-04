@@ -3,7 +3,6 @@ package handler
 import (
 	"errors"
 	"net/http"
-	"time"
 
 	"github.com/mdflamingo/GophKeeper/internal/logger"
 	"github.com/mdflamingo/GophKeeper/internal/server/service"
@@ -23,19 +22,6 @@ func HandleLoginError(w http.ResponseWriter, err error, login string) {
 		logger.Log.Error("failed to login user", zap.Error(err))
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 	}
-}
-
-// setTokenCookie устанавливает JWT токен в cookie
-func SetTokenCookie(w http.ResponseWriter, token string) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     "token",
-		Value:    token,
-		HttpOnly: true,
-		Secure:   false,
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   int(30 * 24 * time.Hour.Seconds()),
-		Path:     "/",
-	})
 }
 
 // handleRegistrationError обрабатывает ошибки регистрации

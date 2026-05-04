@@ -1,7 +1,6 @@
 package config
 
 import (
-	"fmt"
 	"log"
 	"os"
 
@@ -16,12 +15,21 @@ type Postgres struct {
 	PostgresPassword string
 }
 
+type Minio struct {
+	MinioEndpoint     string
+	MinioRootUser     string
+	MinioRootPassword string
+	MinioBucket       string
+	// MinioUseSSL       bool
+}
+
 type Config struct {
 	RunAddr     string
 	LogLevel    string
 	DataBaseDSN Postgres
 	Debug       string
 	SecretKey   string
+	Minio       Minio
 }
 
 func GetConfig() *Config {
@@ -31,8 +39,6 @@ func GetConfig() *Config {
 
 	}
 	debug := os.Getenv("DEBUG")
-	fmt.Println(debug)
-	fmt.Println(os.Getenv("LOG_LEVEL"))
 	pgConfig := Postgres{
 		PostgresDB:       os.Getenv("POSTGRES_DB"),
 		PostgresHost:     os.Getenv("POSTGRES_HOST"),
@@ -40,7 +46,21 @@ func GetConfig() *Config {
 		PostgresUser:     os.Getenv("POSTGRES_USER"),
 		PostgresPassword: os.Getenv("POSTGRES_PASSWORD"),
 	}
-	mainConfig := Config{RunAddr: os.Getenv("RUN_ADDR"), LogLevel: os.Getenv("LOG_LEVEL"), DataBaseDSN: pgConfig, Debug: debug, SecretKey: os.Getenv("SECRET_KEY")}
+	minioConfig := Minio{
+		MinioEndpoint:     os.Getenv("MINIO_ENDPOINT"),
+		MinioRootUser:     os.Getenv("MINIO_ROOT_USER"),
+		MinioRootPassword: os.Getenv("MINIO_ROOT_PASSWORD"),
+		MinioBucket:       os.Getenv("MINIO_BUCKET"),
+		// MinioUseSSL:       os.Getenv("MINIO_SSL"),
+	}
+	mainConfig := Config{
+		RunAddr:     os.Getenv("RUN_ADDR"),
+		LogLevel:    os.Getenv("LOG_LEVEL"),
+		SecretKey:   os.Getenv("SECRET_KEY"),
+		Minio:       minioConfig,
+		DataBaseDSN: pgConfig,
+		Debug:       debug,
+	}
 
 	return &mainConfig
 }

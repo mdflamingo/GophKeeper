@@ -261,6 +261,73 @@ func SaveSecretHandler(w http.ResponseWriter, r *http.Request, svc *service.Goph
 	w.WriteHeader(http.StatusCreated)
 }
 
+// SaveFileSecretHandler godoc
+// @Summary      Загрузка файлового секрета
+// @Description  Загружает файл как секрет пользователя
+// @Tags         secrets
+// @Accept       multipart/form-data
+// @Security     BearerAuth
+// @Param        file formData file true "Файл для загрузки"
+// @Param        data_type formData string true "Тип секрета" Enums(TEXT, CARD, FILE, CREDENTIALS) default(FILE)
+// @Param        data formData string true "Данные секрета в JSON формате" example({"login":"user","password":"pass"})
+// @Success      201  "Успешная загрузка файла"
+// @Failure      400  "Неверный запрос"
+// @Failure      401  "Пользователь не авторизован"
+// @Failure      413  "Файл слишком большой"
+// @Failure      500  "Внутренняя ошибка сервера"
+// @Router       /secret/file [post]
+func SaveFileSecretHandler(w http.ResponseWriter, r *http.Request, gophekeeperService *service.GopheKeeperService, bucketName string) {
+	const maxFileSize = 32 << 20
+	r.Body = http.MaxBytesReader(w, r.Body, maxFileSize)
+
+	err := r.ParseMultipartForm(maxFileSize)
+	if err != nil {
+		logger.Log.Error("failed to parse multipart form", zap.Error(err))
+		http.Error(w, "file too large or invalid form", http.StatusBadRequest)
+		return
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		logger.Log.Error("failed to get file from form", zap.Error(err))
+		http.Error(w, "failed to get file from form", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	userID, err := GetUserIDFromRequest(r)
+	if err != nil {
+		logger.Log.Warn("failed to get user ID", zap.Error(err))
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		return
+	}
+
+	dataType := r.FormValue("data_type")
+	dataJSON := r.FormValue("data")
+
+	inputSecret := model.SecretCreateRequest{
+		DataType: model.DataType(dataType),
+		Data:     json.RawMessage(dataJSON),
+	}
+
+	err = gophekeeperService.SaveFile(
+		r.Context(),
+		file,
+		header.Filename,
+		userID,
+		bucketName,
+		header.Size,
+		inputSecret,
+	)
+	if err != nil {
+		logger.Log.Error("failed to save file", zap.Error(err))
+		http.Error(w, "failed to save file", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+}
+
 // HealthCheck godoc
 // @Summary      Проверка здоровья сервера
 // @Description  Проверяет доступность сервера и подключение к БД

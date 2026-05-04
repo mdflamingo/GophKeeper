@@ -9,6 +9,7 @@ import (
 	_ "github.com/mdflamingo/GophKeeper/api/swagger"
 	"github.com/mdflamingo/GophKeeper/internal/config"
 	"github.com/mdflamingo/GophKeeper/internal/logger"
+	"github.com/mdflamingo/GophKeeper/internal/server/repository/minio"
 	"github.com/mdflamingo/GophKeeper/internal/server/repository/postgres"
 	"github.com/mdflamingo/GophKeeper/internal/server/service"
 )
@@ -32,11 +33,11 @@ import (
 // @in header
 // @name Authorization
 // @description Type "Bearer" followed by a space and JWT token.
-func NewRouter(conf *config.Config, storage postgres.Storage) *chi.Mux {
+func NewRouter(conf *config.Config, storage postgres.Storage, minio minio.FileStorage) *chi.Mux {
 	r := chi.NewRouter()
 
 	userService := service.NewUserService(storage.(*postgres.DBStorage))
-	gophekeeperService := service.NewGopheKeeperService(storage.(*postgres.DBStorage))
+	gophekeeperService := service.NewGopheKeeperService(storage.(*postgres.DBStorage), minio)
 
 	r.Use(logger.RequestLogger)
 
@@ -65,6 +66,9 @@ func NewRouter(conf *config.Config, storage postgres.Storage) *chi.Mux {
 
 		r.Post("/api/secret", func(w http.ResponseWriter, r *http.Request) {
 			SaveSecretHandler(w, r, gophekeeperService)
+		})
+		r.Post("/api/secret/file", func(w http.ResponseWriter, r *http.Request) {
+			SaveFileSecretHandler(w, r, gophekeeperService, conf.Minio.MinioBucket)
 		})
 	})
 
