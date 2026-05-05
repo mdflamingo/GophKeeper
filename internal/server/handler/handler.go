@@ -249,7 +249,7 @@ func SaveSecretHandler(w http.ResponseWriter, r *http.Request, svc *service.Goph
 		return
 	}
 
-	err = svc.SaveOneSecret(inputSecret, userID)
+	secretID, err := svc.SaveOneSecret(inputSecret, userID)
 
 	if err != nil {
 		logger.Log.Error("failed to save secret", zap.Error(err))
@@ -259,6 +259,9 @@ func SaveSecretHandler(w http.ResponseWriter, r *http.Request, svc *service.Goph
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
+	resp := model.SecretCreateResponse{ID: secretID}
+	respJSON, _ := json.Marshal(resp)
+	w.Write(respJSON)
 }
 
 // SaveFileSecretHandler godoc
@@ -310,7 +313,7 @@ func SaveFileSecretHandler(w http.ResponseWriter, r *http.Request, gophekeeperSe
 		Data:     json.RawMessage(dataJSON),
 	}
 
-	err = gophekeeperService.SaveFile(
+	secretID, err := gophekeeperService.SaveFile(
 		r.Context(),
 		file,
 		header.Filename,
@@ -325,7 +328,81 @@ func SaveFileSecretHandler(w http.ResponseWriter, r *http.Request, gophekeeperSe
 		return
 	}
 
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
+	resp := model.SecretCreateResponse{ID: secretID}
+	respJSON, _ := json.Marshal(resp)
+	w.Write(respJSON)
+}
+
+// UpdateSecretHandler godoc
+// @Summary      Обновление секрета пользователя
+// @Description  Обновляет существующий секрет текущего авторизованного пользователя по id
+// @Tags         secrets
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id path int true "ID секрета"
+// @Param        request body model.SecretUpdateRequest true "Обновленные данные секрета"
+// @Success      200 {object} model.SecretResponse "Успешное обновление секрета"
+// @Failure      400 "Неверный запрос"
+// @Failure      401 "Пользователь не авторизован"
+// @Failure      403 "Доступ запрещен (секрет принадлежит другому пользователю)"
+// @Failure      404 "Секрет не найден"
+// @Failure      500 "Внутренняя ошибка сервера"
+// @Router       /secret/{id} [put]
+func UpdateSecretHandler(w http.ResponseWriter, r *http.Request, svc *service.GopheKeeperService) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		logger.Log.Error("failed to read request body", zap.Error(err))
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		return
+	}
+
+	var updateSecret model.SecretUpdateRequest
+	if err := json.Unmarshal(body, &updateSecret); err != nil {
+		logger.Log.Warn("invalid request body", zap.Error(err))
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	userID, err := GetUserIDFromRequest(r)
+	if err != nil {
+		logger.Log.Warn("failed to get user ID", zap.Error(err))
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		return
+	}
+
+	secretIDStr := chi.URLParam(r, "id")
+	if secretIDStr == "" {
+		logger.Log.Warn("secret id is empty")
+		http.Error(w, "Secret ID is required", http.StatusBadRequest)
+		return
+	}
+
+	secretID, err := strconv.Atoi(secretIDStr)
+	if err != nil || secretID <= 0 {
+		logger.Log.Warn("invalid secret ID", zap.String("id", secretIDStr))
+		http.Error(w, "Invalid secret ID", http.StatusBadRequest)
+		return
+	}
+
+	err = svc.UpdateSecret(secretID, userID, updateSecret)
+	if err != nil {
+		if errors.Is(err, service.ErrSecretNotFound) {
+			logger.Log.Error("secret not found", zap.Error(err))
+			http.Error(w, http.StatusText(http.StatusNoContent), http.StatusNoContent)
+			return
+		} else {
+			logger.Log.Error("failed to update secret", zap.Error(err))
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
+
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
 }
 
 // HealthCheck godoc

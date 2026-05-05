@@ -232,17 +232,44 @@ func (d *DBStorage) GetList(userID int) ([]SecretDB, error) {
 	return items, nil
 }
 
-func (d *DBStorage) Save(secret model.SecretCreateRequest, userID int) error {
+func (d *DBStorage) Save(secret model.SecretCreateRequest, userID int) (int, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	var secretID int
+
+	err := d.pool.QueryRow(ctx,
+		`INSERT INTO user_data (user_id, data_type, metadata)
+         VALUES ($1, $2, $3)
+		 RETURNING id`,
+		userID, secret.DataType, secret.Data).Scan(&secretID)
+
+	if err != nil {
+		return 0, fmt.Errorf("failed to save secret: %w", err)
+	}
+
+	return secretID, nil
+}
+
+func (d *DBStorage) Update(secretID, userID int, secret model.SecretUpdateRequest) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	_, err := d.pool.Exec(ctx,
-		`INSERT INTO user_data (user_id, data_type, metadata)
-         VALUES ($1, $2, $3)`,
-		userID, secret.DataType, secret.Data)
+	query := `UPDATE user_data 
+              SET data_type = $1, metadata = $2
+              WHERE id = $3 AND user_id = $4`
+
+	result, err := d.pool.Exec(ctx, query,
+		secret.DataType,
+		secret.Data,
+		secretID,
+		userID)
 
 	if err != nil {
-		return fmt.Errorf("failed to save secret: %w", err)
+		return fmt.Errorf("failed to update secret: %w", err)
+	}
+
+	if result.RowsAffected() == 0 {
+		return ErrNotFound
 	}
 
 	return nil

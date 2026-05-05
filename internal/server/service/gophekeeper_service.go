@@ -135,16 +135,16 @@ func (s *GopheKeeperService) GetOneSecret(userID, secretID int, bucketName strin
 }
 
 // SaveOneSecret сохраняет секрет
-func (s *GopheKeeperService) SaveOneSecret(secret model.SecretCreateRequest, userID int) error {
+func (s *GopheKeeperService) SaveOneSecret(secret model.SecretCreateRequest, userID int) (int, error) {
 	if userID == 0 {
-		return ErrInvalidUserID
+		return 0, ErrInvalidUserID
 	}
-	err := s.repo.Save(secret, userID)
+	secretID, err := s.repo.Save(secret, userID)
 	if err != nil {
-		return ErrSecretSave
+		return secretID, ErrSecretSave
 	}
 
-	return nil
+	return secretID, nil
 }
 
 func (s *GopheKeeperService) SaveFile(
@@ -154,16 +154,16 @@ func (s *GopheKeeperService) SaveFile(
 	userID int,
 	bucketName string,
 	fileSize int64,
-	inputSecret model.SecretCreateRequest) error {
+	inputSecret model.SecretCreateRequest) (int, error) {
 	if userID == 0 {
-		return ErrInvalidUserID
+		return 0, ErrInvalidUserID
 	}
 
 	uniqueFileName := generateUniqueFileName(fileName)
 
 	err := s.minio.UploadFile(ctx, file, bucketName, uniqueFileName, fileSize)
 	if err != nil {
-		return fmt.Errorf("failed to upload file to minio: %w", err)
+		return 0, fmt.Errorf("failed to upload file to minio: %w", err)
 	}
 
 	if inputSecret.Data == nil || len(inputSecret.Data) == 0 {
@@ -174,7 +174,7 @@ func (s *GopheKeeperService) SaveFile(
 		metaBytes, err := enrichMetadata(nil, newFields)
 		if err != nil {
 			// _ = s.minio.DeleteFile(ctx, bucketName, fileName)
-			return fmt.Errorf("failed to create metadata: %w", err)
+			return 0, fmt.Errorf("failed to create metadata: %w", err)
 		}
 		inputSecret.Data = metaBytes
 	} else {
@@ -185,18 +185,18 @@ func (s *GopheKeeperService) SaveFile(
 		enrichedMeta, err := enrichMetadata(inputSecret.Data, newFields)
 		if err != nil {
 			// _ = s.minio.DeleteFile(ctx, bucketName, fileName)
-			return fmt.Errorf("failed to enrich metadata: %w", err)
+			return 0, fmt.Errorf("failed to enrich metadata: %w", err)
 		}
 		inputSecret.Data = enrichedMeta
 	}
 
-	err = s.repo.Save(inputSecret, userID)
+	secretID, err := s.repo.Save(inputSecret, userID)
 	if err != nil {
 		// _ = s.minio.DeleteFile(ctx, bucketName, fileName)
-		return ErrSecretSave
+		return 0, ErrSecretSave
 	}
 
-	return nil
+	return secretID, nil
 }
 
 func enrichMetadata(existingJSON json.RawMessage, newFields map[string]interface{}) (json.RawMessage, error) {
@@ -275,4 +275,17 @@ func processFile(minio minio.FileStorage, secret postgres.SecretDB, fileName str
 	}
 
 	return response, nil
+}
+
+// UpdateSecret обновляет существующий секрет
+func (s *GopheKeeperService) UpdateSecret(secretID, userID int, updateReq model.SecretUpdateRequest) error {
+	err := s.repo.Update(secretID, userID, updateReq)
+	if err != nil {
+		return fmt.Errorf("failed to update secret: %w", err)
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed to get updated secret: %w", err)
+	}
+	return nil
 }

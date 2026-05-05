@@ -37,3 +37,14 @@ type SecretCreateRequest struct {
 	DataType DataType        `json:"data_type" example:"CREDENTIALS" description:"Тип секрета (обязательное поле)"`
 	Data     json.RawMessage `json:"data" swaggertype:"object" description:"Данные секрета в JSON формате (обязательное поле)"`
 }
+
+// SecretUpdateRequest представляет запрос на обновление секрета
+type SecretUpdateRequest struct {
+	DataType DataType        `json:"data_type" example:"CREDENTIALS" description:"Тип секрета (обязательное поле)"`
+	Data     json.RawMessage `json:"data" swaggertype:"object" description:"Данные секрета в JSON формате (обязательное поле)"`
+}
+
+// SecretUpdateRequest представляет ответ с ID созданного секрета
+type SecretCreateResponse struct {
+	ID int `json:"id" example:"5" description:"ID сохраенного секрета секрета"`
+}

@@ -70,6 +70,9 @@ func NewRouter(conf *config.Config, storage postgres.Storage, minio minio.FileSt
 		r.Post("/api/secret/file", func(w http.ResponseWriter, r *http.Request) {
 			SaveFileSecretHandler(w, r, gophekeeperService, conf.Minio.MinioBucket)
 		})
+		r.Put("/api/secret/{id}", func(w http.ResponseWriter, r *http.Request) {
+			UpdateSecretHandler(w, r, gophekeeperService)
+		})
 	})
 
 	// Swagger документация
@@ -80,10 +83,5 @@ func NewRouter(conf *config.Config, storage postgres.Storage, minio minio.FileSt
 		}),
 	))
 
-	// r.Get("/swagger/doc.json", func(w http.ResponseWriter, r *http.Request) {
-	// 	doc, _ := swag.ReadDoc()
-	// 	w.Header().Set("Content-Type", "application/json")
-	// 	w.Write([]byte(doc))
-	// })
 	return r
 }

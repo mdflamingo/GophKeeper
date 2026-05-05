@@ -15,6 +15,7 @@ type Storage interface {
 	Save(secret model.SecretCreateRequest, userID int) error
 	Get(userID, secretID int) (SecretDB, error)
 	GetList(userID int) ([]SecretDB, error)
+	Update(secretID, userID int, secret model.SecretUpdateRequest) error
 	Close() error
 	Ping(ctx context.Context) error
 	SaveUser(user UserDB) (int, error)
