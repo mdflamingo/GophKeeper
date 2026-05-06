@@ -30,6 +30,7 @@ type Config struct {
 	Debug       string
 	SecretKey   string
 	Minio       Minio
+	ServerAddr  string
 }
 
 func GetConfig() *Config {
@@ -57,6 +58,7 @@ func GetConfig() *Config {
 		RunAddr:     os.Getenv("RUN_ADDR"),
 		LogLevel:    os.Getenv("LOG_LEVEL"),
 		SecretKey:   os.Getenv("SECRET_KEY"),
+		ServerAddr:  os.Getenv("SERVER_ADDR"),
 		Minio:       minioConfig,
 		DataBaseDSN: pgConfig,
 		Debug:       debug,
