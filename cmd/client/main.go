@@ -9,50 +9,104 @@ import (
 	"github.com/mdflamingo/GophKeeper/internal/client"
 	"github.com/mdflamingo/GophKeeper/internal/client/commands"
 	"github.com/mdflamingo/GophKeeper/internal/config"
-	"github.com/mdflamingo/GophKeeper/internal/logger"
 )
 
 func main() {
 	conf := config.GetConfig()
-	client := client.NewClient(conf.ServerAddr)
+	c := client.NewClient(conf.ServerAddr)
 
+	fmt.Println("🔐 Добро пожаловать в GophKeeper!")
+	fmt.Println(strings.Repeat("=", 50))
+
+	if err := initializeClient(c); err != nil {
+		fmt.Printf("%v\n", err)
+		os.Exit(1)
+	}
+
+	runMainLoop(c)
+}
+
+func initializeClient(c *client.Client) error {
+	tokenData, err := commands.LoadTokenFromFile()
+	if err == nil && tokenData.Token != "" {
+		c.SetToken(tokenData.Token)
+		return nil
+
+	}
+
+	return showAuthMenu(c)
+}
+
+func showAuthMenu(c *client.Client) error {
+	fmt.Println("\nДля работы с приложением необходимо авторизоваться")
+
+	prompt := promptui.Select{
+		Label: "Выберите действие",
+		Items: []string{
+			"🔑 Войти",
+			"📝 Зарегистрироваться",
+			"🚪 Выйти",
+		},
+	}
+
+	_, action, err := prompt.Run()
+	if err != nil {
+		return err
+	}
+
+	switch action {
+	case "🔑 Войти":
+		return commands.Login(c)
+	case "📝 Зарегистрироваться":
+		return commands.Register(c)
+	case "🚪 Выйти":
+		fmt.Println("👋 До свидания!")
+		os.Exit(0)
+	}
+
+	return nil
+}
+
+func runMainLoop(c *client.Client) {
 	for {
-		actionPrompt := promptui.Select{
+		fmt.Println("\n" + strings.Repeat("=", 50))
+
+		prompt := promptui.Select{
 			Label: "Выберите действие",
 			Items: []string{
-				"Создать секрет",
-				"Получить список секретов",
-				"Получить секрет по id",
-				"Редактировать секрет по id",
-				"Выход",
+				"📝 Создать секрет",
+				"📋 Показать все секреты",
+				"🔍 Найти секрет по ID",
+				"✏️  Редактировать секрет",
+				"🚪 Выйти",
 			},
+			Size: 6,
 		}
 
-		_, action, err := actionPrompt.Run()
+		_, action, err := prompt.Run()
 		if err != nil {
 			fmt.Printf("Ошибка: %v\n", err)
 			continue
 		}
 
 		switch action {
-		case "Создать секрет":
-			err = commands.CreateSecret(client)
-		case "Получить список секретов":
-			err = commands.GetSecrets(client)
-		case "Получить секрет по id":
-			err = commands.GetSecretByID(client)
-		case "Редактировать секрет по id":
-			err = commands.UpdateSecretByID(client)
-		case "Выход":
-			fmt.Println("До свидания!")
-			logger.Log.Info("До свидания!")
+		case "📝 Создать секрет":
+			handleAction(commands.CreateSecret(c))
+		case "📋 Показать все секреты":
+			handleAction(commands.GetSecrets(c))
+		case "🔍 Найти секрет по ID":
+			handleAction(commands.GetSecretByID(c))
+		case "✏️  Редактировать секрет":
+			handleAction(commands.UpdateSecretByID(c))
+		case "🚪 Выйти":
+			fmt.Println("👋 До свидания!")
 			os.Exit(0)
 		}
+	}
+}
 
-		if err != nil {
-			fmt.Printf("❌ %v\n", err)
-		}
-
-		fmt.Println("\n" + strings.Repeat("=", 50) + "\n")
+func handleAction(err error) {
+	if err != nil {
+		fmt.Printf("❌ %v\n", err)
 	}
 }

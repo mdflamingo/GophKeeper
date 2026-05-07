@@ -5,20 +5,26 @@ import (
 )
 
 type Client struct {
-	client *resty.Client
-}
-
-type RequestBody struct {
-	Name  string `json:"name"`
-	Email string `json:"email"`
+	Client *resty.Client
+	Token  string
 }
 
 func NewClient(baseURL string) *Client {
 	client := resty.New()
 	client.SetBaseURL(baseURL)
-	client.SetHeader("Content-Type", "application/json")
 
 	return &Client{
-		client: client,
+		Client: client,
 	}
+}
+
+func (c *Client) SetToken(token string) {
+	c.Token = token
+	if token != "" {
+		c.Client.SetAuthToken(token)
+	}
+}
+
+func (c *Client) GetToken() string {
+	return c.Token
 }

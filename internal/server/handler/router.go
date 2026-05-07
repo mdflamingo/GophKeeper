@@ -9,8 +9,8 @@ import (
 	_ "github.com/mdflamingo/GophKeeper/api/swagger"
 	"github.com/mdflamingo/GophKeeper/internal/config"
 	"github.com/mdflamingo/GophKeeper/internal/logger"
-	"github.com/mdflamingo/GophKeeper/internal/server/repository/minio"
-	"github.com/mdflamingo/GophKeeper/internal/server/repository/postgres"
+	"github.com/mdflamingo/GophKeeper/internal/repository/minio"
+	"github.com/mdflamingo/GophKeeper/internal/repository/postgres"
 	"github.com/mdflamingo/GophKeeper/internal/server/service"
 )
 

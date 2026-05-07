@@ -11,9 +11,9 @@ import (
 
 	"github.com/mdflamingo/GophKeeper/internal/config"
 	"github.com/mdflamingo/GophKeeper/internal/logger"
+	"github.com/mdflamingo/GophKeeper/internal/repository/minio"
+	"github.com/mdflamingo/GophKeeper/internal/repository/postgres"
 	"github.com/mdflamingo/GophKeeper/internal/server/handler"
-	"github.com/mdflamingo/GophKeeper/internal/server/repository/minio"
-	"github.com/mdflamingo/GophKeeper/internal/server/repository/postgres"
 	"go.uber.org/zap"
 )
 

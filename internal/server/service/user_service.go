@@ -8,7 +8,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/mdflamingo/GophKeeper/internal/model"
-	"github.com/mdflamingo/GophKeeper/internal/server/repository/postgres"
+	"github.com/mdflamingo/GophKeeper/internal/repository/postgres"
 )
 
 var (

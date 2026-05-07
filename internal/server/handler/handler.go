@@ -12,7 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/mdflamingo/GophKeeper/internal/logger"
 	"github.com/mdflamingo/GophKeeper/internal/model"
-	"github.com/mdflamingo/GophKeeper/internal/server/repository/postgres"
+	"github.com/mdflamingo/GophKeeper/internal/repository/postgres"
 	"github.com/mdflamingo/GophKeeper/internal/server/service"
 	"go.uber.org/zap"
 )

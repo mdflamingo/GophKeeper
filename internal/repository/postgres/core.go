@@ -12,7 +12,7 @@ import (
 )
 
 type Storage interface {
-	Save(secret model.SecretCreateRequest, userID int) error
+	Save(secret model.SecretCreateRequest, userID int) (int, error)
 	Get(userID, secretID int) (SecretDB, error)
 	GetList(userID int) ([]SecretDB, error)
 	Update(secretID, userID int, secret model.SecretUpdateRequest) error

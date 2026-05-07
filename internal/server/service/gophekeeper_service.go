@@ -12,8 +12,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/mdflamingo/GophKeeper/internal/model"
-	"github.com/mdflamingo/GophKeeper/internal/server/repository/minio"
-	"github.com/mdflamingo/GophKeeper/internal/server/repository/postgres"
+	"github.com/mdflamingo/GophKeeper/internal/repository/minio"
+	"github.com/mdflamingo/GophKeeper/internal/repository/postgres"
 )
 
 var (
