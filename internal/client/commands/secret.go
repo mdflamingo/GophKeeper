@@ -1,57 +1,40 @@
 package commands
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/manifoldco/promptui"
 	"github.com/mdflamingo/GophKeeper/internal/client"
 	"github.com/mdflamingo/GophKeeper/internal/client/requests"
-	"github.com/mdflamingo/GophKeeper/internal/model"
 )
 
+var ErrCreateSecret = errors.New("секрет не создан")
+
 func CreateSecret(c *client.Client) error {
-	typePrompt := promptui.Select{
-		Label: "Выберите тип секрета",
-		Items: []string{
-			string(model.TEXT),
-			string(model.CARD),
-			string(model.CREDENTIALS),
-			string(model.FILE),
-		},
-	}
-	_, typeStr, err := typePrompt.Run()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	data, dataType, err := handleInput()
 	if err != nil {
-		return fmt.Errorf("ошибка выбора типа: %w", err)
+		return err
 	}
-	dataType := model.DataType(typeStr)
-
-	var data any
-
-	switch dataType {
-	case model.TEXT:
-		data, err = inputTextData()
-	case model.CARD:
-		data, err = inputCardData()
-	case model.CREDENTIALS:
-		data, err = inputCredentialsData()
-	// case model.FILE:
-	// 	return createFileSecret(c)
-	default:
-		return errors.New("неизвестный тип секрета")
-	}
-
+	_, err = requests.CreateSecretRequest(ctx, c, dataType, data)
 	if err != nil {
-		return fmt.Errorf("ошибка ввода данных: %w", err)
+		return err
 	}
-	_, err = requests.SendCreateSecretRequest(c, dataType, data)
 	return nil
 
 }
 
 func GetSecrets(c *client.Client) error {
-	response, err := requests.GetSecretListRequest(c)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	response, err := requests.GetSecretListRequest(ctx, c)
 	if err != nil {
 		return fmt.Errorf("ошибка получения списка секретов: %w", err)
 	}
@@ -80,6 +63,9 @@ func GetSecrets(c *client.Client) error {
 }
 
 func GetSecretByID(c *client.Client) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
 	idPrompt := promptui.Prompt{
 		Label: "Введите ID секрета",
 		Validate: func(input string) error {
@@ -95,7 +81,7 @@ func GetSecretByID(c *client.Client) error {
 		return fmt.Errorf("ошибка ввода ID: %w", err)
 	}
 
-	secret, err := requests.GetOneSecretRequest(c, secretID)
+	secret, err := requests.GetOneSecretRequest(ctx, c, secretID)
 	if err != nil {
 		return fmt.Errorf("ошибка получения секрета: %w", err)
 	}
@@ -117,5 +103,29 @@ func GetSecretByID(c *client.Client) error {
 }
 
 func UpdateSecretByID(client *client.Client) error {
-	return errors.New("test error")
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	idPrompt := promptui.Prompt{
+		Label: "Введите ID секрета",
+		Validate: func(input string) error {
+			if len(strings.TrimSpace(input)) == 0 {
+				return errors.New("ID не может быть пустым")
+			}
+			return nil
+		},
+	}
+
+	secretID, err := idPrompt.Run()
+	if err != nil {
+		return fmt.Errorf("ошибка ввода ID: %w", err)
+	}
+
+	data, dataType, err := handleInput()
+	if err != nil {
+		return err
+	}
+
+	err = requests.UpdateSecretRequest(ctx, client, secretID, dataType, data)
+	return nil
 }

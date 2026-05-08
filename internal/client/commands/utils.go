@@ -2,11 +2,14 @@ package commands
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 
 	"github.com/manifoldco/promptui"
-	"github.com/mdflamingo/GophKeeper/internal/client/model"
+	clientModel "github.com/mdflamingo/GophKeeper/internal/client/model"
+
+	apiModel "github.com/mdflamingo/GophKeeper/internal/model"
 )
 
 func validateNotEmpty(input string) error {
@@ -16,7 +19,7 @@ func validateNotEmpty(input string) error {
 	return nil
 }
 
-func inputTextData() (*model.TextData, error) {
+func inputTextData() (*clientModel.TextData, error) {
 	prompt := promptui.Prompt{
 		Label: "Введите текст секрета",
 		Validate: func(input string) error {
@@ -32,11 +35,11 @@ func inputTextData() (*model.TextData, error) {
 		return nil, err
 	}
 
-	return &model.TextData{Text: text}, nil
+	return &clientModel.TextData{Text: text}, nil
 
 }
 
-func inputCardData() (*model.CardData, error) {
+func inputCardData() (*clientModel.CardData, error) {
 	numberPrompt := promptui.Prompt{
 		Label:    "Номер карты",
 		Validate: validateNotEmpty,
@@ -74,7 +77,7 @@ func inputCardData() (*model.CardData, error) {
 		return nil, err
 	}
 
-	return &model.CardData{
+	return &clientModel.CardData{
 		Number:     number,
 		ExpiryDate: expiry,
 		CVV:        cvv,
@@ -82,7 +85,7 @@ func inputCardData() (*model.CardData, error) {
 	}, nil
 }
 
-func inputCredentialsData() (*model.CredentialsData, error) {
+func inputCredentialsData() (*clientModel.CredentialsData, error) {
 	loginPrompt := promptui.Prompt{
 		Label:    "Логин",
 		Validate: validateNotEmpty,
@@ -112,7 +115,7 @@ func inputCredentialsData() (*model.CredentialsData, error) {
 	}
 	note, _ := notePrompt.Run()
 
-	return &model.CredentialsData{
+	return &clientModel.CredentialsData{
 		Login:    login,
 		Password: password,
 		URL:      url,
@@ -125,4 +128,42 @@ func validateFileExists(path string) error {
 		return errors.New("файл не существует")
 	}
 	return nil
+}
+
+func handleInput() (any, apiModel.DataType, error) {
+	typePrompt := promptui.Select{
+		Label: "Выберите тип секрета",
+		Items: []string{
+			string(apiModel.TEXT),
+			string(apiModel.CARD),
+			string(apiModel.CREDENTIALS),
+			string(apiModel.FILE),
+		},
+	}
+	_, typeStr, err := typePrompt.Run()
+	if err != nil {
+		return nil, apiModel.DataType(typeStr), fmt.Errorf("ошибка выбора типа: %w", err)
+	}
+	dataType := apiModel.DataType(typeStr)
+
+	var data any
+
+	switch dataType {
+	case apiModel.TEXT:
+		data, err = inputTextData()
+	case apiModel.CARD:
+		data, err = inputCardData()
+	case apiModel.CREDENTIALS:
+		data, err = inputCredentialsData()
+	// case model.FILE:
+	// 	return createFileSecret(c)
+	default:
+		return nil, apiModel.DataType(typeStr), errors.New("неизвестный тип секрета")
+	}
+
+	if err != nil {
+		return nil, apiModel.DataType(typeStr), fmt.Errorf("ошибка ввода данных: %w", err)
+	}
+
+	return data, dataType, nil
 }

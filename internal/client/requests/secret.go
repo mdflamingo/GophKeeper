@@ -1,6 +1,7 @@
 package requests
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -9,7 +10,7 @@ import (
 	"github.com/mdflamingo/GophKeeper/internal/model"
 )
 
-func SendCreateSecretRequest(c *client.Client, dataType model.DataType, data any) (*model.SecretCreateResponse, error) {
+func CreateSecretRequest(ctx context.Context, c *client.Client, dataType model.DataType, data any) (*model.SecretCreateResponse, error) {
 	dataJSON, err := json.Marshal(data)
 	if err != nil {
 		return nil, fmt.Errorf("ошибка сериализации данных: %w", err)
@@ -23,6 +24,7 @@ func SendCreateSecretRequest(c *client.Client, dataType model.DataType, data any
 	var response model.SecretCreateResponse
 
 	resp, err := c.Client.R().
+		SetContext(ctx).
 		SetBody(request).
 		SetResult(&response).
 		Post("/api/secret")
@@ -39,10 +41,11 @@ func SendCreateSecretRequest(c *client.Client, dataType model.DataType, data any
 	return &response, nil
 }
 
-func GetOneSecretRequest(c *client.Client, secretID string) (*model.SecretResponse, error) {
+func GetOneSecretRequest(ctx context.Context, c *client.Client, secretID string) (*model.SecretResponse, error) {
 	var response model.SecretResponse
 
 	resp, err := c.Client.R().
+		SetContext(ctx).
 		SetResult(&response).
 		SetPathParam("id", secretID).
 		Get("/api/secret/{id}")
@@ -62,10 +65,11 @@ func GetOneSecretRequest(c *client.Client, secretID string) (*model.SecretRespon
 	return &response, nil
 }
 
-func GetSecretListRequest(c *client.Client) (*model.SecretListResponse, error) {
+func GetSecretListRequest(ctx context.Context, c *client.Client) (*model.SecretListResponse, error) {
 	var response model.SecretListResponse
 
 	resp, err := c.Client.R().
+		SetContext(ctx).
 		SetResult(&response).
 		Get("/api/secret/list")
 
@@ -84,7 +88,7 @@ func GetSecretListRequest(c *client.Client) (*model.SecretListResponse, error) {
 	return &response, nil
 }
 
-func UpdateSecretRequest(c *client.Client, secretID string, dataType model.DataType, data any) error {
+func UpdateSecretRequest(ctx context.Context, c *client.Client, secretID string, dataType model.DataType, data any) error {
 	dataJSON, err := json.Marshal(data)
 	if err != nil {
 		return fmt.Errorf("ошибка сериализации данных: %w", err)
@@ -96,6 +100,7 @@ func UpdateSecretRequest(c *client.Client, secretID string, dataType model.DataT
 	}
 
 	resp, err := c.Client.R().
+		SetContext(ctx).
 		SetBody(request).
 		SetPathParam("id", secretID).
 		Put("/api/secret/{id}")
