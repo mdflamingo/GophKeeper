@@ -25,7 +25,7 @@ chmod +x build.sh && ./build.sh
 ```
 После выполнения в директории `dist/` появятся готовые бинарные файлы для всех платформ.
 
-### Шаг 3. Запуск
+### Шаг 3. Запуск клиента
 
 Выберите файл, соответствующий вашей операционной системе:
 ### 🍎 macOS (Intel)
@@ -50,3 +50,18 @@ chmod +x ./dist/gophkeeper_linux_amd64
 ```bash
 dist\gophkeeper_windows_amd64.exe
 ```
+
+### Шаг 3. Запуск сервера
+- По примеру `env_example` создайте и заполните файл `.env`
+- Запустите `PostgreSQL` и `MinIO` через `docker compose`:
+    ```bash
+    docker compose up -d
+    ```
+- Проверьте логи на наличие ошибок:
+    ```bash
+    docker compose logs -f
+    ```
+- Запуск сервера `GophKeeper`
+    ```bash
+    go run cmd/server/main.go
+    ```
