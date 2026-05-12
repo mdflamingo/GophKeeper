@@ -28,25 +28,25 @@ chmod +x build.sh && ./build.sh
 ### Шаг 3. Запуск клиента
 
 Выберите файл, соответствующий вашей операционной системе:
-### 🍎 macOS (Intel)
+### macOS (Intel)
 ```bash
 chmod +x ./dist/gophkeeper_darwin_amd64
 ./dist/gophkeeper_darwin_amd64
 ```
 
-### 🍎 macOS (Apple Silicon — M1/M2/M3)
+### macOS (Apple Silicon — M1/M2/M3)
 ```bash
 chmod +x ./dist/gophkeeper_darwin_arm64
 ./dist/gophkeeper_darwin_arm64
 ```
 
-### 🐧 Linux
+### Linux
 ```bash
 chmod +x ./dist/gophkeeper_linux_amd64
 ./dist/gophkeeper_linux_amd64
 ```
 
-### 🪟 Windows (запуск из командной строки)
+### Windows (запуск из командной строки)
 ```bash
 dist\gophkeeper_windows_amd64.exe
 ```
