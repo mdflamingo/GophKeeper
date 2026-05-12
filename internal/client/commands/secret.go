@@ -5,19 +5,20 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/manifoldco/promptui"
 	"github.com/mdflamingo/GophKeeper/internal/client"
 	"github.com/mdflamingo/GophKeeper/internal/client/crypto"
-	clientModel "github.com/mdflamingo/GophKeeper/internal/client/model"
 	"github.com/mdflamingo/GophKeeper/internal/client/requests"
 	apiModel "github.com/mdflamingo/GophKeeper/internal/model"
+	"github.com/mdflamingo/GophKeeper/internal/repository/sqlite"
 )
 
-func CreateSecret(c *client.Client) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+func CreateSecret(c *client.Client, storage *sqlite.LocalStorage) error {
+	_, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	data, dataType, err := handleInput()
@@ -25,54 +26,44 @@ func CreateSecret(c *client.Client) error {
 		return err
 	}
 
-	switch dataType {
-	case apiModel.FILE:
-		fileData := data.(*clientModel.FileData)
-		_, err = requests.CreateFileSecretRequest(ctx, c, fileData)
-	default:
-		_, err = requests.CreateSecretRequest(ctx, c, dataType, data)
+	_, err = storage.SaveSecret(dataType, data)
+	if err != nil {
+		return fmt.Errorf("ошибка локального сохранения: %w", err)
 	}
 
-	return err
+	fmt.Printf("💾 Секрет сохранен")
+
+	return nil
 }
 
-func GetSecrets(c *client.Client) error {
+func GetSecrets(c *client.Client, storage *sqlite.LocalStorage) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	response, err := requests.GetSecretListRequest(ctx, c)
 	if err != nil {
-		return fmt.Errorf("список секретов: %w", err)
-	}
-
-	if response == nil || response.Count == 0 {
-		fmt.Println("📭 У вас нет сохраненных секретов")
+		fmt.Printf("⚠️  список секретов: %v\n", err)
 		return nil
 	}
 
-	fmt.Printf("\n📋 Всего секретов: %d\n", response.Count)
-	fmt.Println(strings.Repeat("=", 70))
-
-	for i, secret := range response.Secrets {
-		fmt.Printf("[%d] ID: %d | Тип: %-12s | Создан: %s\n",
-			i+1, secret.ID, secret.DataType, secret.CreatedAt.Format("02.01 15:04"))
-
-		if len(secret.MetaData) > 0 {
-			if secret.DataType == apiModel.FILE {
-				fileMeta, err := parseFileMetadata(secret.MetaData)
-				if err != nil {
-					fmt.Printf("     📎 Файл (ошибка метаданных)\n")
-				} else {
-					filename := safeStringValue(fileMeta, "filename")
-					size := safeInt64Value(fileMeta, "size")
-					fmt.Printf("     📎 %s (%d байт)\n", filename, size)
-				}
-			} else {
-				fmt.Printf("     🔐 Зашифровано (введите ID для просмотра)\n")
-			}
-		}
-		fmt.Println(strings.Repeat("-", 70))
+	if response == nil || response.Count == 0 {
+		fmt.Println("📭 Нет секретов")
+		return nil
 	}
+
+	masterPassword, err := crypto.GetMasterKey()
+	if err != nil {
+		fmt.Printf("⚠️  Невозможно расшифровать: %v\n", err)
+		masterPassword = ""
+	}
+
+	fmt.Println(strings.Repeat("=", 90))
+	for i, secret := range response.Secrets {
+		printSecret(i+1, secret, masterPassword)
+		fmt.Println(strings.Repeat("-", 90))
+	}
+	fmt.Println(strings.Repeat("=", 90))
+
 	return nil
 }
 
@@ -122,7 +113,7 @@ func GetSecretByID(c *client.Client) error {
 				fmt.Println("\n💡 Скопируйте ссылку в браузер!")
 			}
 		} else {
-			masterPassword, err := crypto.GetMasterPassword(c)
+			masterPassword, err := crypto.GetMasterKey()
 			if err != nil {
 				fmt.Println("⚠️  Ввод мастер-пароля отменен")
 				return nil
@@ -143,10 +134,7 @@ func GetSecretByID(c *client.Client) error {
 	return nil
 }
 
-func UpdateSecretByID(c *client.Client) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-
+func UpdateSecretByID(c *client.Client, storage *sqlite.LocalStorage) error {
 	idPrompt := promptui.Prompt{
 		Label: "ID секрета для обновления",
 		Validate: func(input string) error {
@@ -156,7 +144,7 @@ func UpdateSecretByID(c *client.Client) error {
 			return nil
 		},
 	}
-	secretID, err := idPrompt.Run()
+	idStr, err := idPrompt.Run()
 	if err != nil {
 		return fmt.Errorf("ввод ID: %w", err)
 	}
@@ -166,12 +154,25 @@ func UpdateSecretByID(c *client.Client) error {
 		return err
 	}
 
-	switch dataType {
-	case apiModel.FILE:
-		fileData := data.(*clientModel.FileData)
-		err = requests.UpdateFileSecretRequest(ctx, c, secretID, fileData)
-	default:
-		err = requests.UpdateSecretRequest(ctx, c, secretID, dataType, data)
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		serverID, parseErr := strconv.ParseInt(idStr, 10, 64)
+		if parseErr == nil {
+			localSecret, findErr := storage.GetSecretByServerID(serverID)
+			if findErr == nil && localSecret != nil {
+				id = int(localSecret.ID)
+			} else {
+				return fmt.Errorf("неверный формат ID: %w", err)
+			}
+		} else {
+			return fmt.Errorf("неверный формат ID: %w", err)
+		}
 	}
-	return err
+
+	if err := storage.UpdateSecret(id, dataType, data); err != nil {
+		return fmt.Errorf("ошибка обновления: %w", err)
+	}
+	fmt.Printf("💾 Секрет #%d обновлен локально\n", id)
+
+	return nil
 }

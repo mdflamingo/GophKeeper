@@ -312,3 +312,61 @@ func (d *DBStorage) GetUser(user UserDB) (int, error) {
 	}
 	return userID, nil
 }
+
+func (d *DBStorage) WithTx(ctx context.Context, fn func(tx pgx.Tx) error) error {
+	tx, err := d.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	if err := fn(tx); err != nil {
+		return fmt.Errorf("transaction function failed: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+	return nil
+}
+
+func (d *DBStorage) SaveWithTx(tx pgx.Tx, secret model.SecretCreateRequest, userID int) (int, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	var secretID int
+	err := tx.QueryRow(ctx,
+		`INSERT INTO user_data (user_id, data_type, metadata)
+		 VALUES ($1, $2, $3)
+		 RETURNING id`,
+		userID, secret.DataType, secret.Data).Scan(&secretID)
+
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
+			return 0, ErrConflict
+		}
+		return 0, fmt.Errorf("failed to save secret: %w", err)
+	}
+	return secretID, nil
+}
+
+func (d *DBStorage) UpdateWithTx(tx pgx.Tx, secretID, userID int, secret model.SecretUpdateRequest) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	query := `UPDATE user_data 
+              SET data_type = $1, metadata = $2, updated_at = NOW()
+              WHERE id = $3 AND user_id = $4
+              RETURNING id`
+
+	var updatedID int
+	err := tx.QueryRow(ctx, query, secret.DataType, secret.Data, secretID, userID).Scan(&updatedID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		}
+		return fmt.Errorf("failed to update secret: %w", err)
+	}
+	return nil
+}

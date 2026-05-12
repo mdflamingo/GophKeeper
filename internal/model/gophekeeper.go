@@ -48,3 +48,42 @@ type SecretUpdateRequest struct {
 type SecretCreateResponse struct {
 	ID int `json:"id" example:"5" description:"ID сохраенного секрета секрета"`
 }
+
+// BatchSyncRequest запрос на батчевую синхронизацию
+type BatchSyncRequest struct {
+	Secrets []BatchSecret `json:"secrets" validate:"dive"`
+}
+
+// BatchSecret один секрет в батче
+type BatchSecret struct {
+	LocalID      int             `json:"local_id" validate:"required"`
+	ServerID     *int            `json:"server_id,omitempty"`
+	DataType     DataType        `json:"data_type" validate:"required,oneof=TEXT FILE CARD CREDENTIALS"`
+	Data         json.RawMessage `json:"data" validate:"required"`
+	LocalVersion int             `json:"local_version" validate:"required"`
+}
+
+// BatchSyncResponse ответ на батчевую синхронизацию
+type BatchSyncResponse struct {
+	Success []BatchSyncResult `json:"success"`
+	Failed  []BatchSyncError  `json:"failed"`
+	Stats   BatchStats        `json:"stats"`
+}
+
+type BatchSyncResult struct {
+	LocalID  int `json:"local_id"`
+	ServerID int `json:"server_id"`
+}
+
+type BatchSyncError struct {
+	LocalID  int    `json:"local_id"`
+	Error    string `json:"error"`
+	ServerID *int   `json:"server_id,omitempty"`
+}
+
+type BatchStats struct {
+	Processed int `json:"processed"`
+	Created   int `json:"created"`
+	Updated   int `json:"updated"`
+	Failed    int `json:"failed"`
+}

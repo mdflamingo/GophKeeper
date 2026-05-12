@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/manifoldco/promptui"
+	"github.com/mdflamingo/GophKeeper/internal/client/crypto"
 	clientModel "github.com/mdflamingo/GophKeeper/internal/client/model"
 
 	apiModel "github.com/mdflamingo/GophKeeper/internal/model"
@@ -222,4 +223,84 @@ func handleInput() (any, apiModel.DataType, error) {
 	}
 
 	return data, dataType, nil
+}
+
+func printSecret(index int, secret apiModel.SecretResponse, masterPassword string) {
+	fmt.Printf(" [%d] ID:%-4d | Тип данных: %-12s | Дата создания: %s\n",
+		index, secret.ID, secret.DataType, secret.CreatedAt.Format("02.01 15:04"))
+
+	if len(secret.MetaData) == 0 {
+		fmt.Println("       📭 Нет данных")
+		return
+	}
+
+	switch secret.DataType {
+	case apiModel.FILE:
+		fileMeta, err := parseFileMetadata(secret.MetaData)
+		if err != nil {
+			fmt.Printf("       ❌ Метаданные: %v\n", err)
+			return
+		}
+		filename := safeStringValue(fileMeta, "filename")
+		size := safeInt64Value(fileMeta, "size")
+		url := safeStringValue(fileMeta, "download_url")
+
+		fmt.Printf("	📄 Имя файла: %s\n", filename)
+		fmt.Printf("	📏 Размер: %s\n", formatBytes(size))
+		fmt.Printf("	🔗 Ссылка: %s\n", url)
+
+	case apiModel.TEXT, apiModel.CREDENTIALS, apiModel.CARD:
+		if masterPassword == "" {
+			fmt.Printf("       🔒 Зашифровано (%d байт)\n", len(secret.MetaData))
+			return
+		}
+
+		decrypted, err := crypto.Decrypt(secret.MetaData, masterPassword)
+		if err != nil {
+			fmt.Printf("       ❌ %v\n", err)
+			return
+		}
+
+		preview := formatPreview(decrypted)
+		fmt.Printf("	🔓 %s\n", preview)
+
+	default:
+		fmt.Printf("       ❓ %s (%d байт)\n", secret.DataType, len(secret.MetaData))
+	}
+}
+
+func formatBytes(bytes int64) string {
+	if bytes == 0 {
+		return "0 B"
+	}
+	sizes := []string{"B", "KB", "MB", "GB"}
+	i := 0
+	for bytes >= 1024 && i < len(sizes)-1 {
+		bytes /= 1024
+		i++
+	}
+	return fmt.Sprintf("%d %s", bytes, sizes[i])
+}
+
+func formatPreview(data map[string]interface{}) string {
+	if len(data) == 0 {
+		return "пусто"
+	}
+
+	var parts []string
+	for key, value := range data {
+		strVal := fmt.Sprintf("%v", value)
+		if len(strVal) > 20 {
+			strVal = strVal[:17] + "..."
+		}
+		parts = append(parts, fmt.Sprintf("%s=%s", key, strVal))
+		if len(parts) >= 2 {
+			break
+		}
+	}
+
+	if len(parts) == 0 {
+		return "данные скрыты"
+	}
+	return strings.Join(parts, " | ")
 }

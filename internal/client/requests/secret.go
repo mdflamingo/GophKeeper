@@ -12,7 +12,7 @@ import (
 )
 
 func CreateSecretRequest(ctx context.Context, c *client.Client, dataType apiModel.DataType, rawData any) (*apiModel.SecretCreateResponse, error) {
-	masterPassword, err := crypto.GetMasterPassword(c)
+	masterPassword, err := crypto.GetMasterKey()
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +90,7 @@ func GetSecretListRequest(ctx context.Context, c *client.Client) (*apiModel.Secr
 }
 
 func UpdateSecretRequest(ctx context.Context, c *client.Client, secretID string, dataType apiModel.DataType, rawData any) error {
-	masterPassword, err := crypto.GetMasterPassword(c)
+	masterPassword, err := crypto.GetMasterKey()
 	if err != nil {
 		return err
 	}

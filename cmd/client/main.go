@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -8,12 +9,21 @@ import (
 	"github.com/manifoldco/promptui"
 	"github.com/mdflamingo/GophKeeper/internal/client"
 	"github.com/mdflamingo/GophKeeper/internal/client/commands"
+	"github.com/mdflamingo/GophKeeper/internal/client/requests"
 	"github.com/mdflamingo/GophKeeper/internal/config"
+	"github.com/mdflamingo/GophKeeper/internal/repository/sqlite"
 )
 
 func main() {
 	conf := config.GetConfig()
 	c := client.NewClient(conf.ServerAddr)
+
+	storage, err := sqlite.New("./")
+	if err != nil {
+		fmt.Printf("❌ Ошибка создания хранилища: %v\n", err)
+		os.Exit(1)
+	}
+	defer storage.Close()
 
 	fmt.Println("🔐 Добро пожаловать в GophKeeper!")
 	fmt.Println(strings.Repeat("=", 50))
@@ -23,7 +33,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	runMainLoop(c)
+	syncCtx, syncCancel := context.WithCancel(context.Background())
+	syncService := requests.New(storage, c)
+	go syncService.Start(syncCtx)
+	defer syncCancel()
+
+	runMainLoop(c, storage, syncService)
 }
 
 func initializeClient(c *client.Client) error {
@@ -67,9 +82,8 @@ func showAuthMenu(c *client.Client) error {
 	return nil
 }
 
-func runMainLoop(c *client.Client) {
+func runMainLoop(c *client.Client, storage *sqlite.LocalStorage, syncService *requests.SyncService) {
 	for {
-		fmt.Println("\n" + strings.Repeat("=", 50))
 
 		prompt := promptui.Select{
 			Label: "Выберите действие",
@@ -77,10 +91,10 @@ func runMainLoop(c *client.Client) {
 				"📝 Создать секрет",
 				"📋 Показать все секреты",
 				"🔍 Найти секрет по ID",
-				"✏️  Редактировать секрет",
+				"✏️ Редактировать секрет",
 				"🚪 Выйти",
 			},
-			Size: 6,
+			Size: 7,
 		}
 
 		_, action, err := prompt.Run()
@@ -91,13 +105,13 @@ func runMainLoop(c *client.Client) {
 
 		switch action {
 		case "📝 Создать секрет":
-			handleAction(commands.CreateSecret(c))
+			handleAction(commands.CreateSecret(c, storage))
 		case "📋 Показать все секреты":
-			handleAction(commands.GetSecrets(c))
+			handleAction(commands.GetSecrets(c, storage))
 		case "🔍 Найти секрет по ID":
 			handleAction(commands.GetSecretByID(c))
-		case "✏️  Редактировать секрет":
-			handleAction(commands.UpdateSecretByID(c))
+		case "✏️ Редактировать секрет":
+			handleAction(commands.UpdateSecretByID(c, storage))
 		case "🚪 Выйти":
 			fmt.Println("👋 До свидания!")
 			os.Exit(0)

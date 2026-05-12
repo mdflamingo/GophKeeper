@@ -82,6 +82,7 @@ require (
 	github.com/golang-migrate/migrate/v4 v4.19.1
 	github.com/jackc/pgerrcode v0.0.0-20250907135507-afb5586c32a6
 	github.com/jackc/pgx/v5 v5.9.2
+	github.com/mattn/go-sqlite3 v1.14.44
 	github.com/minio/minio-go/v7 v7.1.0
 	github.com/swaggo/http-swagger v1.3.4
 	go.uber.org/multierr v1.10.0 // indirect

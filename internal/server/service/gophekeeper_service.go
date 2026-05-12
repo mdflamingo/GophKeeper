@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/mdflamingo/GophKeeper/internal/model"
 	"github.com/mdflamingo/GophKeeper/internal/repository/minio"
 	"github.com/mdflamingo/GophKeeper/internal/repository/postgres"
@@ -33,7 +34,6 @@ func NewGopheKeeperService(repo *postgres.DBStorage, minio minio.FileStorage) *G
 	return &GopheKeeperService{repo: repo, minio: minio}
 }
 
-// GetSecrets возвращает список секретов в виде response моделей
 func (s *GopheKeeperService) GetSecrets(userID int, bucketName string) (*model.SecretListResponse, error) {
 	if userID == 0 {
 		return nil, ErrInvalidUserID
@@ -97,7 +97,6 @@ func (s *GopheKeeperService) GetSecrets(userID int, bucketName string) (*model.S
 	return response, nil
 }
 
-// GetOneSecret возвращает секрет в виде response модели
 func (s *GopheKeeperService) GetOneSecret(userID, secretID int, bucketName string) (*model.SecretResponse, error) {
 	if userID == 0 {
 		return nil, ErrInvalidUserID
@@ -134,7 +133,6 @@ func (s *GopheKeeperService) GetOneSecret(userID, secretID int, bucketName strin
 	return response, nil
 }
 
-// SaveOneSecret сохраняет секрет
 func (s *GopheKeeperService) SaveOneSecret(secret model.SecretCreateRequest, userID int) (int, error) {
 	if userID == 0 {
 		return 0, ErrInvalidUserID
@@ -277,7 +275,6 @@ func processFile(minio minio.FileStorage, secret postgres.SecretDB, fileName str
 	return response, nil
 }
 
-// UpdateSecret обновляет существующий секрет
 func (s *GopheKeeperService) UpdateSecret(secretID, userID int, updateReq model.SecretUpdateRequest) error {
 	err := s.repo.Update(secretID, userID, updateReq)
 	if err != nil {
@@ -288,4 +285,89 @@ func (s *GopheKeeperService) UpdateSecret(secretID, userID int, updateReq model.
 		return fmt.Errorf("failed to get updated secret: %w", err)
 	}
 	return nil
+}
+
+func (s *GopheKeeperService) BatchSync(userID int, req model.BatchSyncRequest) (*model.BatchSyncResponse, error) {
+	if userID == 0 {
+		return nil, ErrInvalidUserID
+	}
+
+	var (
+		success []model.BatchSyncResult
+		failed  []model.BatchSyncError
+		created int
+		updated int
+	)
+
+	err := s.repo.WithTx(context.Background(), func(tx pgx.Tx) error {
+		for _, secret := range req.Secrets {
+			var result model.BatchSyncResult
+			result.LocalID = int(secret.LocalID)
+
+			if secret.ServerID != nil && *secret.ServerID > 0 {
+				err := s.repo.UpdateWithTx(tx, *secret.ServerID, userID, model.SecretUpdateRequest{
+					DataType: secret.DataType,
+					Data:     secret.Data,
+				})
+				if err != nil {
+					if errors.Is(err, postgres.ErrNotFound) {
+						newID, createErr := s.repo.SaveWithTx(tx, model.SecretCreateRequest{
+							DataType: secret.DataType,
+							Data:     secret.Data,
+						}, userID)
+						if createErr != nil {
+							failed = append(failed, model.BatchSyncError{
+								LocalID: result.LocalID,
+								Error:   "create failed: " + createErr.Error(),
+							})
+							continue
+						}
+						result.ServerID = newID
+						created++
+					} else {
+						failed = append(failed, model.BatchSyncError{
+							LocalID: result.LocalID,
+							Error:   "update failed: " + err.Error(),
+						})
+						continue
+					}
+				} else {
+					result.ServerID = *secret.ServerID
+					updated++
+				}
+			} else {
+				newID, err := s.repo.SaveWithTx(tx, model.SecretCreateRequest{
+					DataType: secret.DataType,
+					Data:     secret.Data,
+				}, userID)
+				if err != nil {
+					failed = append(failed, model.BatchSyncError{
+						LocalID: result.LocalID,
+						Error:   "create failed: " + err.Error(),
+					})
+					continue
+				}
+				result.ServerID = newID
+				created++
+			}
+
+			success = append(success, result)
+		}
+		return nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("batch sync transaction failed: %w", err)
+	}
+
+	return &model.BatchSyncResponse{
+		Success: success,
+		Failed:  failed,
+		Stats: model.BatchStats{
+			Processed: len(req.Secrets),
+			Created:   created,
+			Updated:   updated,
+			Failed:    len(failed),
+		},
+	}, nil
 }

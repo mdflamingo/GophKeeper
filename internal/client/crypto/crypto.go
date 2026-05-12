@@ -9,7 +9,21 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
+
+	"github.com/joho/godotenv"
 )
+
+func GetMasterKey() (string, error) {
+	_ = godotenv.Load(".env")
+
+	masterKey := os.Getenv("MASTER_KEY")
+	if masterKey == "" {
+		return "", fmt.Errorf("мастер ключ не найден в .env файле")
+	}
+
+	return masterKey, nil
+}
 
 func Encrypt(data any, masterPassword string) (json.RawMessage, error) {
 	dataJSON, err := json.Marshal(data)

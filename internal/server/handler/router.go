@@ -73,6 +73,9 @@ func NewRouter(conf *config.Config, storage postgres.Storage, minio minio.FileSt
 		r.Put("/api/secret/{id}", func(w http.ResponseWriter, r *http.Request) {
 			UpdateSecretHandler(w, r, gophekeeperService)
 		})
+		r.Post("/api/secret/batch", func(w http.ResponseWriter, r *http.Request) {
+			BatchSyncHandler(w, r, gophekeeperService)
+		})
 	})
 
 	// Swagger документация

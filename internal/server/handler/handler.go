@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -403,6 +404,80 @@ func UpdateSecretHandler(w http.ResponseWriter, r *http.Request, svc *service.Go
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
+}
+
+// BatchSyncHandler godoc
+// @Summary      Батчевая синхронизация секретов
+// @Description  Синхронизирует батч локальных секретов клиента с сервером
+// @Tags         secrets
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        request body model.BatchSyncRequest true "Батч секретов для синхронизации"
+// @Success      200 {object} model.BatchSyncResponse "Успешная синхронизация"
+// @Failure      400 "Неверный запрос"
+// @Failure      401 "Пользователь не авторизован"
+// @Failure      413 "Слишком большой батч (>100 секретов)"
+// @Failure      500 "Внутренняя ошибка сервера"
+// @Router       /secret/batch [post]
+func BatchSyncHandler(w http.ResponseWriter, r *http.Request, svc *service.GopheKeeperService) {
+	const maxBatchSize = 100
+
+	userID, err := GetUserIDFromRequest(r)
+	if err != nil {
+		logger.Log.Warn("failed to get user ID", zap.Error(err))
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		return
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		logger.Log.Error("failed to read request body", zap.Error(err))
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		return
+	}
+
+	var batchReq model.BatchSyncRequest
+	if err := json.Unmarshal(body, &batchReq); err != nil {
+		logger.Log.Warn("invalid batch request body", zap.Error(err))
+		http.Error(w, "Invalid batch request body", http.StatusBadRequest)
+		return
+	}
+
+	if len(batchReq.Secrets) > maxBatchSize {
+		logger.Log.Warn("batch too large", zap.Int("size", len(batchReq.Secrets)))
+		http.Error(w, "Batch too large (max 100 secrets)", http.StatusRequestEntityTooLarge)
+		return
+	}
+
+	if len(batchReq.Secrets) == 0 {
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(model.BatchSyncResponse{
+			Success: []model.BatchSyncResult{},
+			Failed:  []model.BatchSyncError{},
+			Stats:   model.BatchStats{Processed: 0},
+		})
+		return
+	}
+
+	logger.Log.Info("batch sync started",
+		zap.Int("user_id", userID),
+		zap.Int("batch_size", len(batchReq.Secrets)))
+
+	response, err := svc.BatchSync(userID, batchReq)
+	if err != nil {
+		logger.Log.Error("batch sync failed", zap.Error(err), zap.Int("user_id", userID))
+		http.Error(w, "Batch sync failed", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Batch-Processed", fmt.Sprintf("%d", response.Stats.Processed))
+	w.WriteHeader(http.StatusOK)
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		logger.Log.Error("failed to encode batch response", zap.Error(err))
+	}
 }
 
 // HealthCheck godoc
