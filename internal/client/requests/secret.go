@@ -7,11 +7,12 @@ import (
 
 	"github.com/mdflamingo/GophKeeper/internal/client"
 	"github.com/mdflamingo/GophKeeper/internal/client/crypto"
-	"github.com/mdflamingo/GophKeeper/internal/model"
+	clientModel "github.com/mdflamingo/GophKeeper/internal/client/model"
+	apiModel "github.com/mdflamingo/GophKeeper/internal/model"
 )
 
-func CreateSecretRequest(ctx context.Context, c *client.Client, dataType model.DataType, rawData any) (*model.SecretCreateResponse, error) {
-	masterPassword, err := crypto.GetMasterPassword()
+func CreateSecretRequest(ctx context.Context, c *client.Client, dataType apiModel.DataType, rawData any) (*apiModel.SecretCreateResponse, error) {
+	masterPassword, err := crypto.GetMasterPassword(c)
 	if err != nil {
 		return nil, err
 	}
@@ -21,12 +22,12 @@ func CreateSecretRequest(ctx context.Context, c *client.Client, dataType model.D
 		return nil, fmt.Errorf("шифрование: %w", err)
 	}
 
-	request := model.SecretCreateRequest{
+	request := apiModel.SecretCreateRequest{
 		DataType: dataType,
 		Data:     encryptedData,
 	}
 
-	var response model.SecretCreateResponse
+	var response apiModel.SecretCreateResponse
 	resp, err := c.Client.R().
 		SetContext(ctx).
 		SetBody(request).
@@ -40,8 +41,9 @@ func CreateSecretRequest(ctx context.Context, c *client.Client, dataType model.D
 	fmt.Printf("✅ Секрет создан! ID: %d\n", response.ID)
 	return &response, nil
 }
-func GetOneSecretRequest(ctx context.Context, c *client.Client, secretID string) (*model.SecretResponse, error) {
-	var response model.SecretResponse
+
+func GetOneSecretRequest(ctx context.Context, c *client.Client, secretID string) (*apiModel.SecretResponse, error) {
+	var response apiModel.SecretResponse
 
 	resp, err := c.Client.R().
 		SetContext(ctx).
@@ -64,8 +66,8 @@ func GetOneSecretRequest(ctx context.Context, c *client.Client, secretID string)
 	return &response, nil
 }
 
-func GetSecretListRequest(ctx context.Context, c *client.Client) (*model.SecretListResponse, error) {
-	var response model.SecretListResponse
+func GetSecretListRequest(ctx context.Context, c *client.Client) (*apiModel.SecretListResponse, error) {
+	var response apiModel.SecretListResponse
 
 	resp, err := c.Client.R().
 		SetContext(ctx).
@@ -87,8 +89,8 @@ func GetSecretListRequest(ctx context.Context, c *client.Client) (*model.SecretL
 	return &response, nil
 }
 
-func UpdateSecretRequest(ctx context.Context, c *client.Client, secretID string, dataType model.DataType, rawData any) error {
-	masterPassword, err := crypto.GetMasterPassword()
+func UpdateSecretRequest(ctx context.Context, c *client.Client, secretID string, dataType apiModel.DataType, rawData any) error {
+	masterPassword, err := crypto.GetMasterPassword(c)
 	if err != nil {
 		return err
 	}
@@ -98,7 +100,7 @@ func UpdateSecretRequest(ctx context.Context, c *client.Client, secretID string,
 		return fmt.Errorf("шифрование: %w", err)
 	}
 
-	request := model.SecretUpdateRequest{
+	request := apiModel.SecretUpdateRequest{
 		DataType: dataType,
 		Data:     encryptedData,
 	}
@@ -118,5 +120,54 @@ func UpdateSecretRequest(ctx context.Context, c *client.Client, secretID string,
 	}
 
 	fmt.Printf("✅ Секрет #%s успешно обновлен!\n", secretID)
+	return nil
+}
+
+func CreateFileSecretRequest(ctx context.Context, c *client.Client, fileData *clientModel.FileData) (*apiModel.SecretCreateResponse, error) {
+	request := c.Client.R().
+		SetContext(ctx).
+		SetFile("file", fileData.Path).
+		SetFormData(map[string]string{
+			"data_type": string(apiModel.FILE),
+			"data":      `{"filename":"` + fileData.Filename + `","size":` + fmt.Sprintf("%d", fileData.Size) + `}`,
+		}).
+		SetResult(&apiModel.SecretCreateResponse{})
+
+	resp, err := request.Post("/api/secret/file")
+	if err != nil {
+		return nil, fmt.Errorf("ошибка отправки запроса: %w", err)
+	}
+
+	if resp.IsError() {
+		return nil, fmt.Errorf("сервер вернул ошибку: %d - %s", resp.StatusCode(), string(resp.Body()))
+	}
+
+	response := resp.Result().(*apiModel.SecretCreateResponse)
+	fmt.Printf("✅ Файл '%s' успешно загружен! ID: %d (размер: %d байт)\n",
+		fileData.Filename, response.ID, fileData.Size)
+
+	return response, nil
+}
+
+func UpdateFileSecretRequest(ctx context.Context, c *client.Client, secretID string, fileData *clientModel.FileData) error {
+	resp, err := c.Client.R().
+		SetContext(ctx).
+		SetFile("file", fileData.Path).
+		SetFormData(map[string]string{
+			"data_type": string(apiModel.FILE),
+			"data":      `{"filename":"` + fileData.Filename + `","size":` + fmt.Sprintf("%d", fileData.Size) + `}`,
+		}).
+		SetPathParam("id", secretID).
+		Put("/api/secret/file/{id}")
+
+	if err != nil {
+		return fmt.Errorf("ошибка отправки запроса: %w", err)
+	}
+
+	if resp.IsError() {
+		return fmt.Errorf("сервер вернул ошибку: %d - %s", resp.StatusCode(), string(resp.Body()))
+	}
+
+	fmt.Printf("✅ Файл '%s' успешно обновлен! ID: %s\n", fileData.Filename, secretID)
 	return nil
 }

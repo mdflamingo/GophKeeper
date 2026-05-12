@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -12,6 +13,27 @@ import (
 	apiModel "github.com/mdflamingo/GophKeeper/internal/model"
 )
 
+func safeStringValue(data map[string]interface{}, key string) string {
+	if val, ok := data[key].(string); ok && val != "" {
+		return val
+	}
+	return "неизвестно"
+}
+
+func safeInt64Value(data map[string]interface{}, key string) int64 {
+	if val, ok := data[key].(float64); ok {
+		return int64(val)
+	}
+	return 0
+}
+
+func parseFileMetadata(metaData json.RawMessage) (map[string]interface{}, error) {
+	var data map[string]interface{}
+	if err := json.Unmarshal(metaData, &data); err != nil {
+		return nil, err
+	}
+	return data, nil
+}
 func validateNotEmpty(input string) error {
 	if len(strings.TrimSpace(input)) == 0 {
 		return errors.New("поле не может быть пустым")
@@ -123,6 +145,40 @@ func inputCredentialsData() (*clientModel.CredentialsData, error) {
 	}, nil
 }
 
+func inputFileData() (*clientModel.FileData, error) {
+	filePrompt := promptui.Prompt{
+		Label: "Путь к файлу",
+		Validate: func(input string) error {
+			if len(strings.TrimSpace(input)) == 0 {
+				return errors.New("путь к файлу не может быть пустым")
+			}
+			return validateFileExists(input)
+		},
+	}
+
+	filePath, err := filePrompt.Run()
+	if err != nil {
+		return nil, err
+	}
+
+	fileInfo, err := os.Stat(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка получения информации о файле: %w", err)
+	}
+
+	const maxSize = 10 * 1024 * 1024
+	if fileInfo.Size() > maxSize {
+		return nil, fmt.Errorf("файл слишком большой: %d байт (максимум %d)",
+			fileInfo.Size(), maxSize)
+	}
+
+	return &clientModel.FileData{
+		Path:     filePath,
+		Filename: fileInfo.Name(),
+		Size:     fileInfo.Size(),
+	}, nil
+}
+
 func validateFileExists(path string) error {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return errors.New("файл не существует")
@@ -155,8 +211,8 @@ func handleInput() (any, apiModel.DataType, error) {
 		data, err = inputCardData()
 	case apiModel.CREDENTIALS:
 		data, err = inputCredentialsData()
-	// case model.FILE:
-	// 	return createFileSecret(c)
+	case apiModel.FILE:
+		data, err = inputFileData()
 	default:
 		return nil, apiModel.DataType(typeStr), errors.New("неизвестный тип секрета")
 	}

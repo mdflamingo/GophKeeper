@@ -1,16 +1,32 @@
 package crypto
 
-import "github.com/manifoldco/promptui"
+import (
+	"fmt"
 
-var masterPasswordCache string
+	"github.com/manifoldco/promptui"
+	"github.com/mdflamingo/GophKeeper/internal/client"
+)
 
-func GetMasterPassword() (string, error) {
-	if masterPasswordCache == "" {
-		prompt := promptui.Prompt{
-			Label: "🔐 Мастер-пароль",
-			Mask:  '*',
-		}
-		masterPasswordCache, _ = prompt.Run()
+func GetMasterPassword(client *client.Client) (string, error) {
+	if cachedPass, ok := client.GetCachedMasterPassword(); ok {
+		return cachedPass, nil
 	}
-	return masterPasswordCache, nil
+
+	prompt := promptui.Prompt{
+		Label: "🔐 Мастер-пароль",
+		Mask:  '*',
+	}
+	pass, err := prompt.Run()
+	if err != nil {
+		return "", err
+	}
+
+	client.SetMasterPassword(pass)
+	return pass, nil
+}
+
+func ClearMasterPasswordCache(c *client.Client) error {
+	c.ClearMasterPassword()
+	fmt.Println("✅ Кэш мастер-пароля очищен")
+	return nil
 }

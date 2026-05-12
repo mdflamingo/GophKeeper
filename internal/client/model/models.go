@@ -22,3 +22,9 @@ type TokenData struct {
 	Token string `json:"token"`
 	Login string `json:"login"`
 }
+
+type FileData struct {
+	Path     string `json:"path"`
+	Filename string `json:"filename"`
+	Size     int64  `json:"size"`
+}
