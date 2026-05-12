@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
 	apiModel "github.com/mdflamingo/GophKeeper/internal/model"
+	_ "modernc.org/sqlite"
 )
 
 type SyncStatus string
@@ -48,7 +48,7 @@ func New(baseDir string) (*LocalStorage, error) {
 
 	dbPath := filepath.Join(dir, "secrets.db")
 
-	db, err := sql.Open("sqlite3", dbPath+"?_journal_mode=WAL&_synchronous=NORMAL&_busy_timeout=5000")
+	db, err := sql.Open("sqlite", dbPath+"?_journal_mode=WAL&_synchronous=NORMAL&_busy_timeout=5000")
 	if err != nil {
 		return nil, fmt.Errorf("открытие БД: %w", err)
 	}
@@ -87,12 +87,6 @@ func initTables(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_sync_status ON local_secrets(sync_status)`,
 		`CREATE INDEX IF NOT EXISTS idx_updated_at ON local_secrets(updated_at)`,
 		`CREATE INDEX IF NOT EXISTS idx_data_type ON local_secrets(data_type)`,
-
-		`CREATE TABLE IF NOT EXISTS sync_metadata (
-			key TEXT PRIMARY KEY,
-			value TEXT NOT NULL,
-			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-		)`,
 	}
 
 	for _, query := range queries {
