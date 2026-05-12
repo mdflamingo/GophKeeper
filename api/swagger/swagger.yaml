@@ -22,6 +22,79 @@ definitions:
     - login
     - password
     type: object
+  github_com_mdflamingo_GophKeeper_internal_model.BatchSecret:
+    properties:
+      data:
+        items:
+          type: integer
+        type: array
+      data_type:
+        allOf:
+        - $ref: '#/definitions/github_com_mdflamingo_GophKeeper_internal_model.DataType'
+        enum:
+        - TEXT
+        - FILE
+        - CARD
+        - CREDENTIALS
+      local_id:
+        type: integer
+      local_version:
+        type: integer
+      server_id:
+        type: integer
+    required:
+    - data
+    - data_type
+    - local_id
+    - local_version
+    type: object
+  github_com_mdflamingo_GophKeeper_internal_model.BatchStats:
+    properties:
+      created:
+        type: integer
+      failed:
+        type: integer
+      processed:
+        type: integer
+      updated:
+        type: integer
+    type: object
+  github_com_mdflamingo_GophKeeper_internal_model.BatchSyncError:
+    properties:
+      error:
+        type: string
+      local_id:
+        type: integer
+      server_id:
+        type: integer
+    type: object
+  github_com_mdflamingo_GophKeeper_internal_model.BatchSyncRequest:
+    properties:
+      secrets:
+        items:
+          $ref: '#/definitions/github_com_mdflamingo_GophKeeper_internal_model.BatchSecret'
+        type: array
+    type: object
+  github_com_mdflamingo_GophKeeper_internal_model.BatchSyncResponse:
+    properties:
+      failed:
+        items:
+          $ref: '#/definitions/github_com_mdflamingo_GophKeeper_internal_model.BatchSyncError'
+        type: array
+      stats:
+        $ref: '#/definitions/github_com_mdflamingo_GophKeeper_internal_model.BatchStats'
+      success:
+        items:
+          $ref: '#/definitions/github_com_mdflamingo_GophKeeper_internal_model.BatchSyncResult'
+        type: array
+    type: object
+  github_com_mdflamingo_GophKeeper_internal_model.BatchSyncResult:
+    properties:
+      local_id:
+        type: integer
+      server_id:
+        type: integer
+    type: object
   github_com_mdflamingo_GophKeeper_internal_model.DataType:
     enum:
     - TEXT
@@ -67,6 +140,15 @@ definitions:
         type: integer
       meta_data:
         type: object
+    type: object
+  github_com_mdflamingo_GophKeeper_internal_model.SecretUpdateRequest:
+    properties:
+      data:
+        type: object
+      data_type:
+        allOf:
+        - $ref: '#/definitions/github_com_mdflamingo_GophKeeper_internal_model.DataType'
+        example: CREDENTIALS
     type: object
 host: localhost:8080
 info:
@@ -155,6 +237,77 @@ paths:
       security:
       - BearerAuth: []
       summary: Получение секрета пользователя
+      tags:
+      - secrets
+    put:
+      consumes:
+      - application/json
+      description: Обновляет существующий секрет текущего авторизованного пользователя
+        по id
+      parameters:
+      - description: ID секрета
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Обновленные данные секрета
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_mdflamingo_GophKeeper_internal_model.SecretUpdateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Успешное обновление секрета
+          schema:
+            $ref: '#/definitions/github_com_mdflamingo_GophKeeper_internal_model.SecretResponse'
+        "400":
+          description: Неверный запрос
+        "401":
+          description: Пользователь не авторизован
+        "403":
+          description: Доступ запрещен (секрет принадлежит другому пользователю)
+        "404":
+          description: Секрет не найден
+        "500":
+          description: Внутренняя ошибка сервера
+      security:
+      - BearerAuth: []
+      summary: Обновление секрета пользователя
+      tags:
+      - secrets
+  /secret/batch:
+    post:
+      consumes:
+      - application/json
+      description: Синхронизирует батч локальных секретов клиента с сервером
+      parameters:
+      - description: Батч секретов для синхронизации
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_mdflamingo_GophKeeper_internal_model.BatchSyncRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Успешная синхронизация
+          schema:
+            $ref: '#/definitions/github_com_mdflamingo_GophKeeper_internal_model.BatchSyncResponse'
+        "400":
+          description: Неверный запрос
+        "401":
+          description: Пользователь не авторизован
+        "413":
+          description: Слишком большой батч (>100 секретов)
+        "500":
+          description: Внутренняя ошибка сервера
+      security:
+      - BearerAuth: []
+      summary: Батчевая синхронизация секретов
       tags:
       - secrets
   /secret/file:

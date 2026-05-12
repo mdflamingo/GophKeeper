@@ -88,6 +88,57 @@
                 }
             }
         },
+        "/secret/batch": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Синхронизирует батч локальных секретов клиента с сервером",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "secrets"
+                ],
+                "summary": "Батчевая синхронизация секретов",
+                "parameters": [
+                    {
+                        "description": "Батч секретов для синхронизации",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_mdflamingo_GophKeeper_internal_model.BatchSyncRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Успешная синхронизация",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_mdflamingo_GophKeeper_internal_model.BatchSyncResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Неверный запрос"
+                    },
+                    "401": {
+                        "description": "Пользователь не авторизован"
+                    },
+                    "413": {
+                        "description": "Слишком большой батч (\u003e100 секретов)"
+                    },
+                    "500": {
+                        "description": "Внутренняя ошибка сервера"
+                    }
+                }
+            }
+        },
         "/secret/file": {
             "post": {
                 "security": [
@@ -237,6 +288,65 @@
                         "description": "Внутренняя ошибка сервера"
                     }
                 }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Обновляет существующий секрет текущего авторизованного пользователя по id",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "secrets"
+                ],
+                "summary": "Обновление секрета пользователя",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID секрета",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Обновленные данные секрета",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_mdflamingo_GophKeeper_internal_model.SecretUpdateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Успешное обновление секрета",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_mdflamingo_GophKeeper_internal_model.SecretResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Неверный запрос"
+                    },
+                    "401": {
+                        "description": "Пользователь не авторизован"
+                    },
+                    "403": {
+                        "description": "Доступ запрещен (секрет принадлежит другому пользователю)"
+                    },
+                    "404": {
+                        "description": "Секрет не найден"
+                    },
+                    "500": {
+                        "description": "Внутренняя ошибка сервера"
+                    }
+                }
             }
         },
         "/user/login": {
@@ -357,6 +467,118 @@
                 }
             }
         },
+        "github_com_mdflamingo_GophKeeper_internal_model.BatchSecret": {
+            "type": "object",
+            "required": [
+                "data",
+                "data_type",
+                "local_id",
+                "local_version"
+            ],
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "data_type": {
+                    "enum": [
+                        "TEXT",
+                        "FILE",
+                        "CARD",
+                        "CREDENTIALS"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/github_com_mdflamingo_GophKeeper_internal_model.DataType"
+                        }
+                    ]
+                },
+                "local_id": {
+                    "type": "integer"
+                },
+                "local_version": {
+                    "type": "integer"
+                },
+                "server_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "github_com_mdflamingo_GophKeeper_internal_model.BatchStats": {
+            "type": "object",
+            "properties": {
+                "created": {
+                    "type": "integer"
+                },
+                "failed": {
+                    "type": "integer"
+                },
+                "processed": {
+                    "type": "integer"
+                },
+                "updated": {
+                    "type": "integer"
+                }
+            }
+        },
+        "github_com_mdflamingo_GophKeeper_internal_model.BatchSyncError": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                },
+                "local_id": {
+                    "type": "integer"
+                },
+                "server_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "github_com_mdflamingo_GophKeeper_internal_model.BatchSyncRequest": {
+            "type": "object",
+            "properties": {
+                "secrets": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_mdflamingo_GophKeeper_internal_model.BatchSecret"
+                    }
+                }
+            }
+        },
+        "github_com_mdflamingo_GophKeeper_internal_model.BatchSyncResponse": {
+            "type": "object",
+            "properties": {
+                "failed": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_mdflamingo_GophKeeper_internal_model.BatchSyncError"
+                    }
+                },
+                "stats": {
+                    "$ref": "#/definitions/github_com_mdflamingo_GophKeeper_internal_model.BatchStats"
+                },
+                "success": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_mdflamingo_GophKeeper_internal_model.BatchSyncResult"
+                    }
+                }
+            }
+        },
+        "github_com_mdflamingo_GophKeeper_internal_model.BatchSyncResult": {
+            "type": "object",
+            "properties": {
+                "local_id": {
+                    "type": "integer"
+                },
+                "server_id": {
+                    "type": "integer"
+                }
+            }
+        },
         "github_com_mdflamingo_GophKeeper_internal_model.DataType": {
             "type": "string",
             "enum": [
@@ -424,6 +646,22 @@
                 },
                 "meta_data": {
                     "type": "object"
+                }
+            }
+        },
+        "github_com_mdflamingo_GophKeeper_internal_model.SecretUpdateRequest": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "object"
+                },
+                "data_type": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/github_com_mdflamingo_GophKeeper_internal_model.DataType"
+                        }
+                    ],
+                    "example": "CREDENTIALS"
                 }
             }
         }
