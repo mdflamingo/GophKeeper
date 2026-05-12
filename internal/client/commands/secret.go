@@ -42,7 +42,7 @@ func GetSecrets(c *client.Client, storage *sqlite.LocalStorage) error {
 
 	response, err := requests.GetSecretListRequest(ctx, c)
 	if err != nil {
-		fmt.Printf("⚠️  список секретов: %v\n", err)
+		fmt.Printf("⚠️  Ошибка при получении списка секретов: %v\n", err)
 		return nil
 	}
 

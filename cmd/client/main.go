@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"os"
 	"strings"
@@ -15,6 +16,22 @@ import (
 )
 
 func main() {
+	versionFlag := flag.Bool("version", false, "Показать информацию о версии")
+	helpFlag := flag.Bool("help", false, "Показать справку")
+	flag.Parse()
+
+	versionInfo := GetInfo()
+
+	if *versionFlag {
+		fmt.Println(versionInfo.String())
+		return
+	}
+
+	if *helpFlag {
+		showHelp(versionInfo)
+		return
+	}
+
 	conf := config.GetConfig()
 	c := client.NewClient(conf.ServerAddr)
 
@@ -27,6 +44,7 @@ func main() {
 
 	fmt.Println("🔐 Добро пожаловать в GophKeeper!")
 	fmt.Println(strings.Repeat("=", 50))
+	fmt.Printf("Версия: %s\n\n", versionInfo.Short())
 
 	if err := initializeClient(c); err != nil {
 		fmt.Printf("%v\n", err)
@@ -123,4 +141,17 @@ func handleAction(err error) {
 	if err != nil {
 		fmt.Printf("❌ %v\n", err)
 	}
+}
+
+func showHelp(info Info) {
+	fmt.Printf("GophKeeper - Менеджер секретов v%s\n\n", info.Version)
+	fmt.Println("Использование:")
+	fmt.Println("  gophkeeper [флаги]")
+	fmt.Println("\nФлаги:")
+	fmt.Println("  -version    Показать информацию о версии")
+	fmt.Println("  -help       Показать эту справку")
+	fmt.Println("\nПримеры:")
+	fmt.Println("  gophkeeper              Запустить интерактивный режим")
+	fmt.Println("  gophkeeper -version     Показать версию")
+	fmt.Printf("\nПлатформа: %s\n", info.Platform)
 }
