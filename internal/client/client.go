@@ -1,6 +1,8 @@
 package client
 
 import (
+	"crypto/tls"
+
 	"github.com/go-resty/resty/v2"
 )
 
@@ -12,6 +14,11 @@ type Client struct {
 func NewClient(baseURL string) *Client {
 	client := resty.New()
 	client.SetBaseURL(baseURL)
+
+	// ТОЛЬКО ДЛЯ РАЗРАБОТКИ!!!!
+	client.SetTLSClientConfig(&tls.Config{
+		InsecureSkipVerify: true,
+	})
 
 	return &Client{
 		Client: client,
