@@ -1,0 +1,443 @@
+basePath: /api
+definitions:
+  github_com_mdflamingo_GophKeeper_internal_model.AuthResponse:
+    properties:
+      token:
+        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        type: string
+    type: object
+  github_com_mdflamingo_GophKeeper_internal_model.AuthUser:
+    properties:
+      login:
+        example: user@example.com
+        maxLength: 100
+        minLength: 3
+        type: string
+      password:
+        example: strongpassword123
+        maxLength: 100
+        minLength: 6
+        type: string
+    required:
+    - login
+    - password
+    type: object
+  github_com_mdflamingo_GophKeeper_internal_model.BatchSecret:
+    properties:
+      data:
+        items:
+          type: integer
+        type: array
+      data_type:
+        allOf:
+        - $ref: '#/definitions/github_com_mdflamingo_GophKeeper_internal_model.DataType'
+        enum:
+        - TEXT
+        - FILE
+        - CARD
+        - CREDENTIALS
+      local_id:
+        type: integer
+      local_version:
+        type: integer
+      server_id:
+        type: integer
+    required:
+    - data
+    - data_type
+    - local_id
+    - local_version
+    type: object
+  github_com_mdflamingo_GophKeeper_internal_model.BatchStats:
+    properties:
+      created:
+        type: integer
+      failed:
+        type: integer
+      processed:
+        type: integer
+      updated:
+        type: integer
+    type: object
+  github_com_mdflamingo_GophKeeper_internal_model.BatchSyncError:
+    properties:
+      error:
+        type: string
+      local_id:
+        type: integer
+      server_id:
+        type: integer
+    type: object
+  github_com_mdflamingo_GophKeeper_internal_model.BatchSyncRequest:
+    properties:
+      secrets:
+        items:
+          $ref: '#/definitions/github_com_mdflamingo_GophKeeper_internal_model.BatchSecret'
+        type: array
+    type: object
+  github_com_mdflamingo_GophKeeper_internal_model.BatchSyncResponse:
+    properties:
+      failed:
+        items:
+          $ref: '#/definitions/github_com_mdflamingo_GophKeeper_internal_model.BatchSyncError'
+        type: array
+      stats:
+        $ref: '#/definitions/github_com_mdflamingo_GophKeeper_internal_model.BatchStats'
+      success:
+        items:
+          $ref: '#/definitions/github_com_mdflamingo_GophKeeper_internal_model.BatchSyncResult'
+        type: array
+    type: object
+  github_com_mdflamingo_GophKeeper_internal_model.BatchSyncResult:
+    properties:
+      local_id:
+        type: integer
+      server_id:
+        type: integer
+    type: object
+  github_com_mdflamingo_GophKeeper_internal_model.DataType:
+    enum:
+    - TEXT
+    - CARD
+    - FILE
+    - CREDENTIALS
+    type: string
+    x-enum-varnames:
+    - TEXT
+    - CARD
+    - FILE
+    - CREDENTIALS
+  github_com_mdflamingo_GophKeeper_internal_model.SecretCreateRequest:
+    properties:
+      data:
+        type: object
+      data_type:
+        allOf:
+        - $ref: '#/definitions/github_com_mdflamingo_GophKeeper_internal_model.DataType'
+        example: CREDENTIALS
+    type: object
+  github_com_mdflamingo_GophKeeper_internal_model.SecretListResponse:
+    properties:
+      count:
+        example: 5
+        type: integer
+      secrets:
+        items:
+          $ref: '#/definitions/github_com_mdflamingo_GophKeeper_internal_model.SecretResponse'
+        type: array
+    type: object
+  github_com_mdflamingo_GophKeeper_internal_model.SecretResponse:
+    properties:
+      created_at:
+        example: "2024-01-01T12:00:00Z"
+        type: string
+      data_type:
+        allOf:
+        - $ref: '#/definitions/github_com_mdflamingo_GophKeeper_internal_model.DataType'
+        example: CREDENTIALS
+      id:
+        example: 5
+        type: integer
+      meta_data:
+        type: object
+    type: object
+  github_com_mdflamingo_GophKeeper_internal_model.SecretUpdateRequest:
+    properties:
+      data:
+        type: object
+      data_type:
+        allOf:
+        - $ref: '#/definitions/github_com_mdflamingo_GophKeeper_internal_model.DataType'
+        example: CREDENTIALS
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: support@gophkeeper.com
+    name: API Support
+  description: API сервиса GophKeeper для безопасного хранения данных
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: http://swagger.io/terms/
+  title: GophKeeper API
+  version: "1.0"
+paths:
+  /ping:
+    get:
+      description: Проверяет доступность сервера и подключение к БД
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Проверка здоровья сервера
+      tags:
+      - monitoring
+  /secret:
+    post:
+      consumes:
+      - application/json
+      description: Создает секрет текущего авторизованного пользователя
+      parameters:
+      - description: Данные секрета
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_mdflamingo_GophKeeper_internal_model.SecretCreateRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Успешное создание секрета
+        "400":
+          description: Неверный запрос
+        "401":
+          description: Пользователь не авторизован
+        "500":
+          description: Внутренняя ошибка сервера
+      security:
+      - BearerAuth: []
+      summary: Создание секрета пользователя
+      tags:
+      - secrets
+  /secret/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Возвращает секрет текущего авторизованного пользователя по id секрета
+      parameters:
+      - description: ID секрета
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Успешное получение секрета
+          schema:
+            $ref: '#/definitions/github_com_mdflamingo_GophKeeper_internal_model.SecretResponse'
+        "204":
+          description: Секрет не найден
+        "400":
+          description: Неверный запрос
+        "401":
+          description: Пользователь не авторизован
+        "500":
+          description: Внутренняя ошибка сервера
+      security:
+      - BearerAuth: []
+      summary: Получение секрета пользователя
+      tags:
+      - secrets
+    put:
+      consumes:
+      - application/json
+      description: Обновляет существующий секрет текущего авторизованного пользователя
+        по id
+      parameters:
+      - description: ID секрета
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Обновленные данные секрета
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_mdflamingo_GophKeeper_internal_model.SecretUpdateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Успешное обновление секрета
+          schema:
+            $ref: '#/definitions/github_com_mdflamingo_GophKeeper_internal_model.SecretResponse'
+        "400":
+          description: Неверный запрос
+        "401":
+          description: Пользователь не авторизован
+        "403":
+          description: Доступ запрещен (секрет принадлежит другому пользователю)
+        "404":
+          description: Секрет не найден
+        "500":
+          description: Внутренняя ошибка сервера
+      security:
+      - BearerAuth: []
+      summary: Обновление секрета пользователя
+      tags:
+      - secrets
+  /secret/batch:
+    post:
+      consumes:
+      - application/json
+      description: Синхронизирует батч локальных секретов клиента с сервером
+      parameters:
+      - description: Батч секретов для синхронизации
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_mdflamingo_GophKeeper_internal_model.BatchSyncRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Успешная синхронизация
+          schema:
+            $ref: '#/definitions/github_com_mdflamingo_GophKeeper_internal_model.BatchSyncResponse'
+        "400":
+          description: Неверный запрос
+        "401":
+          description: Пользователь не авторизован
+        "413":
+          description: Слишком большой батч (>100 секретов)
+        "500":
+          description: Внутренняя ошибка сервера
+      security:
+      - BearerAuth: []
+      summary: Батчевая синхронизация секретов
+      tags:
+      - secrets
+  /secret/file:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Загружает файл как секрет пользователя
+      parameters:
+      - description: Файл для загрузки
+        in: formData
+        name: file
+        required: true
+        type: file
+      - default: FILE
+        description: Тип секрета
+        enum:
+        - TEXT
+        - CARD
+        - FILE
+        - CREDENTIALS
+        in: formData
+        name: data_type
+        required: true
+        type: string
+      - description: Данные секрета в JSON формате
+        example: '{"login":"user","password":"pass"}'
+        in: formData
+        name: data
+        required: true
+        type: string
+      responses:
+        "201":
+          description: Успешная загрузка файла
+        "400":
+          description: Неверный запрос
+        "401":
+          description: Пользователь не авторизован
+        "413":
+          description: Файл слишком большой
+        "500":
+          description: Внутренняя ошибка сервера
+      security:
+      - BearerAuth: []
+      summary: Загрузка файлового секрета
+      tags:
+      - secrets
+  /secret/list:
+    get:
+      consumes:
+      - application/json
+      description: Возвращает список всех сохраненных секретов (данных) текущего авторизованного
+        пользователя
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Успешное получение списка секретов
+          schema:
+            $ref: '#/definitions/github_com_mdflamingo_GophKeeper_internal_model.SecretListResponse'
+        "204":
+          description: Нет содержимого (список секретов пуст)
+        "401":
+          description: Пользователь не авторизован
+        "500":
+          description: Внутренняя ошибка сервера
+      security:
+      - BearerAuth: []
+      summary: Получение списка секретов пользователя
+      tags:
+      - secrets
+  /user/login:
+    post:
+      consumes:
+      - application/json
+      description: Вход в систему с получением JWT токена
+      parameters:
+      - description: Учетные данные пользователя
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_mdflamingo_GophKeeper_internal_model.AuthUser'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Успешный вход, токен в cookie и теле ответа
+          schema:
+            $ref: '#/definitions/github_com_mdflamingo_GophKeeper_internal_model.AuthResponse'
+        "400":
+          description: Неверный запрос или пустые поля
+        "401":
+          description: Неверный логин или пароль
+        "500":
+          description: Внутренняя ошибка сервера
+      summary: Аутентификация пользователя
+      tags:
+      - auth
+  /user/register:
+    post:
+      consumes:
+      - application/json
+      description: Создает нового пользователя с указанным логином и паролем
+      parameters:
+      - description: Данные для регистрации
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_mdflamingo_GophKeeper_internal_model.AuthUser'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Успешная регистрация, токен в cookie и теле ответа
+          schema:
+            $ref: '#/definitions/github_com_mdflamingo_GophKeeper_internal_model.AuthResponse'
+        "400":
+          description: Неверный запрос или пустые поля
+        "409":
+          description: Пользователь с таким логином уже существует
+        "500":
+          description: Внутренняя ошибка сервера
+      summary: Регистрация нового пользователя
+      tags:
+      - auth
+securityDefinitions:
+  BearerAuth:
+    description: Type "Bearer" followed by a space and JWT token.
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"
